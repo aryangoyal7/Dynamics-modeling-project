@@ -1,0 +1,10 @@
+# large / regenerable artifacts stay out of git
+runs/
+scratch_backup/
+*.log
+*.aux
+*.out
+nohup.out
+__pycache__/
+*.pyc
+wandb/

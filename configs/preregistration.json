@@ -1,0 +1,141 @@
+{
+ "_purpose": "Preregistered decision rules and search budgets (plan: 'Statistics and preregistration'). Fixed BEFORE the first training run. MUST NOT be revised after any arm has been launched.",
+ "date_fixed": "2026-08-16",
+ "task": "SlideToSlotT3-v1",
+ "falsification_rule": {
+  "test": "arm A vs arm B degradation slopes",
+  "procedure": "Fit R(delta) per seed (regret = 1 - success_once, and separately mean final distance to slot), extract the slope per seed by ordinary least squares over the delta grid, compare slope distributions.",
+  "n_seeds_min": 10,
+  "ci": "95% t-interval over seeds",
+  "rule": "If the 95% CIs of s_base and s_treat overlap, the effect is absent and that IS the reported result. Interpolation, extrapolation and composition grid points are fitted and reported separately, never averaged.",
+  "primary_target_type": "multistep",
+  "note": "B's one-step and latent targets are reported alongside; a one-step null alone is explained by BYOL-gamma and does not falsify."
+ },
+ "lambda_sweep": {
+  "values": "20 log-spaced values from 3e-3 to 30 inclusive",
+  "n_seeds": 5,
+  "coupling_metric": "corr over lambda of probe R^2 for c (k) against negative degradation slope (-s)"
+ },
+ "test_d_budget": {
+  "rule": "Exactly 12 configurations per substitution arm, identical count across arms. No configuration may be added, removed, or re-run with different hyperparameters after launch. Each configuration runs the SAME seeds (0-4).",
+  "closing_criterion": "A substitution closes the gap iff |s_sub - s_treat| < epsilon with epsilon = 0.25 * |s_base - s_treat|, where s_base and s_treat are the main-arm mean slopes (10 seeds, multistep target, 1e4 data scale). Equivalently: the substitution must cover at least 75% of the A-to-B slope gap.",
+  "arms": {
+   "weight_decay_M2": {
+    "flag": "--weight-decay",
+    "configs": [
+     1e-06,
+     3e-06,
+     1e-05,
+     3e-05,
+     0.0001,
+     0.0003,
+     0.001,
+     0.003,
+     0.01,
+     0.03,
+     0.1,
+     0.3
+    ]
+   },
+   "jacobian_penalty_M5": {
+    "flag": "--jacobian-penalty",
+    "configs": [
+     1e-06,
+     3e-06,
+     1e-05,
+     3e-05,
+     0.0001,
+     0.0003,
+     0.001,
+     0.003,
+     0.01,
+     0.03,
+     0.1,
+     0.3
+    ]
+   },
+   "extra_data_M3": {
+    "flag": "--data + --data-fraction against the 1e5 source set",
+    "supervision_ratio": "dim(x)*H/dim(a) = 13*8/64 = 1.625",
+    "configs_effective_data_multiplier": [
+     1.1,
+     1.2,
+     1.3,
+     1.4,
+     1.5,
+     1.625,
+     1.75,
+     2.0,
+     2.5,
+     3.0,
+     4.0,
+     5.0
+    ]
+   },
+   "extended_schedule_M4": {
+    "flags": "--schedule-mult x --lr",
+    "configs": [
+     {
+      "schedule_mult": 2,
+      "lr": 0.0001
+     },
+     {
+      "schedule_mult": 2,
+      "lr": 0.0002
+     },
+     {
+      "schedule_mult": 2,
+      "lr": 0.0003
+     },
+     {
+      "schedule_mult": 2,
+      "lr": 0.0005
+     },
+     {
+      "schedule_mult": 3,
+      "lr": 0.0001
+     },
+     {
+      "schedule_mult": 3,
+      "lr": 0.0002
+     },
+     {
+      "schedule_mult": 3,
+      "lr": 0.0003
+     },
+     {
+      "schedule_mult": 3,
+      "lr": 0.0005
+     },
+     {
+      "schedule_mult": 4,
+      "lr": 0.0001
+     },
+     {
+      "schedule_mult": 4,
+      "lr": 0.0002
+     },
+     {
+      "schedule_mult": 4,
+      "lr": 0.0003
+     },
+     {
+      "schedule_mult": 4,
+      "lr": 0.0005
+     }
+    ]
+   }
+  }
+ },
+ "outcome_table": {
+  "shuf_matches_treat": "Not dynamics; a second head suffices.",
+  "shuf_matches_base_and_k_s_coupled_and_no_substitution_closes": "M1 (dynamics knowledge) supported.",
+  "shuf_matches_base_and_k_s_decoupled": "A mechanism not on the list.",
+  "any_substitution_closes": "That substitution names the mechanism."
+ },
+ "amendment_2026_08_17_test_c_interpretation": {
+  "context": "Recorded BEFORE any study arm was launched. The probe/ablation calibration tier measured that linear (single-direction and 16-dim INLP subspace) erasure cannot remove a redundantly/nonlinearly encoded quantity from trained features: the erased quantity remained decodable and the erasure impaired control no more than an equal-dimension random subspace, while the dummy negative control was exactly null.",
+  "rule": "Test C (probe-then-ablate) results are interpreted asymmetrically: a POSITIVE differential effect (ablating the c-subspace degrades the slope substantially more than the random-subspace control) is evidence for M1; a NULL differential is UNINFORMATIVE about M1 and must not be counted as evidence against it. Erasure power (post-erasure ridge and MLP probe R^2) is reported alongside every ablation.",
+  "ablation_method": "INLP subspace erasure (max 16 dims, ridge, r2_stop 0.05) with equal-dimension random orthonormal subspace control, per dynmod/analysis/probes.py"
+ }
+}

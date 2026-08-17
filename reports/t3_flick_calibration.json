@@ -1,0 +1,47 @@
+{
+ "mu0.33_m0.75": {
+  "best_success": 0.625,
+  "best_speed": 1.0,
+  "scatter_cm": 2.2
+ },
+ "mu0.33_m1.0": {
+  "best_success": 0.531,
+  "best_speed": 1.0,
+  "scatter_cm": 2.4
+ },
+ "mu0.33_m1.35": {
+  "best_success": 0.625,
+  "best_speed": 1.0,
+  "scatter_cm": 3.4
+ },
+ "mu0.5_m0.75": {
+  "best_success": 0.438,
+  "best_speed": 1.0,
+  "scatter_cm": 2.6
+ },
+ "mu0.5_m1.0": {
+  "best_success": 0.438,
+  "best_speed": 1.0,
+  "scatter_cm": 2.3
+ },
+ "mu0.5_m1.35": {
+  "best_success": 0.531,
+  "best_speed": 1.0,
+  "scatter_cm": 2.9
+ },
+ "mu0.68_m0.75": {
+  "best_success": 0.188,
+  "best_speed": 1.0,
+  "scatter_cm": 2.6
+ },
+ "mu0.68_m1.0": {
+  "best_success": 0.219,
+  "best_speed": 1.0,
+  "scatter_cm": 2.4
+ },
+ "mu0.68_m1.35": {
+  "best_success": 0.219,
+  "best_speed": 1.0,
+  "scatter_cm": 3.2
+ }
+}

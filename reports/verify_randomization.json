@@ -1,0 +1,99 @@
+{
+ "env_id": "SlideToSlotT3-v1",
+ "obj_start": [
+  -0.06,
+  0.0,
+  0.02
+ ],
+ "finals": {
+  "nominal": {
+   "xy": [
+    0.5592541694641113,
+    -0.006489753723144531
+   ],
+   "yaw": 0.03012578934431076
+  },
+  "nominal-duplicate": {
+   "xy": [
+    0.2006792426109314,
+    0.004544258117675781
+   ],
+   "yaw": -0.2837088704109192
+  },
+  "light-slippery": {
+   "xy": [
+    0.4741482734680176,
+    0.0016889572143554688
+   ],
+   "yaw": 0.0019020440522581339
+  },
+  "heavy-rough": {
+   "xy": [
+    0.12392520904541016,
+    0.00017566738824825734
+   ],
+   "yaw": 0.010065832175314426
+  },
+  "heavy-only": {
+   "xy": [
+    0.18791845440864563,
+    0.005972836632281542
+   ],
+   "yaw": 0.305105596780777
+  },
+  "slippery-only": {
+   "xy": [
+    0.4748539924621582,
+    0.00833667442202568
+   ],
+   "yaw": -0.07715663313865662
+  },
+  "com+y": {
+   "xy": [
+    0.16894817352294922,
+    0.015849590301513672
+   ],
+   "yaw": -1.076576590538025
+  },
+  "com-y": {
+   "xy": [
+    0.18856056034564972,
+    -0.0003943443298339844
+   ],
+   "yaw": 1.4813553094863892
+  }
+ },
+ "checks": {
+  "push_moved_nominal_obj_>5cm": {
+   "value": 0.6192881746828963,
+   "ok": true,
+   "required": true
+  },
+  "mass_changes_outcome_>1cm": {
+   "value": 0.37154480814933777,
+   "ok": true,
+   "required": true
+  },
+  "friction_changes_outcome_>1cm": {
+   "value": 0.08569254726171494,
+   "ok": true,
+   "required": true
+  },
+  "combined_extremes_differ_>2cm": {
+   "value": 0.35022634267807007,
+   "ok": true,
+   "required": true
+  },
+  "com_offset_pair_differs": {
+   "value": 0.12789659500122072,
+   "ok": true,
+   "required": true
+  },
+  "identical_c_matches_<2mm": {
+   "value": 0.35874465107917786,
+   "ok": false,
+   "required": false
+  }
+ },
+ "gate_passed": true
+}

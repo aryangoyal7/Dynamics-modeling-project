@@ -1,0 +1,83 @@
+{
+ "report": {
+  "trained": {
+   "gain_K": {
+    "ridge_r2": 0.9273,
+    "mlp_r2": 0.9455,
+    "n_for_r2": 32
+   },
+   "mass": {
+    "ridge_r2": 0.831,
+    "mlp_r2": 0.8511,
+    "n_for_r2": 32
+   },
+   "damping": {
+    "ridge_r2": 0.0341,
+    "mlp_r2": 0.0369,
+    "n_for_r2": -1
+   },
+   "dummy": {
+    "ridge_r2": 0.0033,
+    "mlp_r2": 0.0033,
+    "n_for_r2": -1
+   }
+  },
+  "untrained_baseline": {
+   "gain_K": {
+    "ridge_r2": 0.1777,
+    "mlp_r2": 0.1909,
+    "n_for_r2": -1
+   },
+   "mass": {
+    "ridge_r2": 0.1861,
+    "mlp_r2": 0.1956,
+    "n_for_r2": -1
+   },
+   "damping": {
+    "ridge_r2": 0.0028,
+    "mlp_r2": 0.0018,
+    "n_for_r2": -1
+   },
+   "dummy": {
+    "ridge_r2": -0.0008,
+    "mlp_r2": -0.0004,
+    "n_for_r2": -1
+   }
+  },
+  "raw_input": {
+   "gain_K": {
+    "ridge_r2": 0.0001,
+    "mlp_r2": 0.0977,
+    "n_for_r2": -1
+   },
+   "mass": {
+    "ridge_r2": -0.0001,
+    "mlp_r2": 0.1089,
+    "n_for_r2": -1
+   },
+   "damping": {
+    "ridge_r2": -0.0002,
+    "mlp_r2": 0.0,
+    "n_for_r2": -1
+   },
+   "dummy": {
+    "ridge_r2": -0.0001,
+    "mlp_r2": -0.0014,
+    "n_for_r2": -1
+   }
+  }
+ },
+ "checks": {
+  "expert-used quantity K decodable from trained features (R2>0.6)": true,
+  "dummy NOT decodable (R2<0.1)": true,
+  "trained beats untrained baseline on K": true,
+  "ablating dummy direction has no effect (vs random control)": true,
+  "K ablation informative OR limitation measured and documented": true
+ },
+ "control_errors": {
+  "base": 0.08137377448835571,
+  "mass": 0.0897672051599552,
+  "dummy": 0.08137377448835571,
+  "random": 0.09034785517743454
+ }
+}
