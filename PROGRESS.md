@@ -91,7 +91,25 @@ to fence out, so T5's geometry is clean. Env `CliffTossT5-v1` + gate
 `premium_gate_t5.py` (running). Bars as always: healthy success, premium
 clearly positive.
 
-## 🧭 Designed, not built: T6 "Router" — the long-horizon dynamics task
+## 🚧 T7 "Router" build log (2026-08-18, late night) — renamed from the
+## Router design below to fix a numbering collision with the dead Push-T T6
+
+Core built per user direction (run it, don't hold it): `RouteChoiceT7-v1`
+(two channels — slick vs grippy floor — off a shared staging area; the
+knowledge is the discrete route choice) plus its gate with a
+route-then-flick controller. Five probe iterations tonight, each fixing a
+measured fault: (1) grippy floor 0.9 stopped everything at the mouth — a
+universal safe route, lowered to 0.35; (2) open-area windups scatter
+launches 15–20 cm — added walled approach lanes; (3+4) two software
+conditions cut the strike mid-contact — follow-through restored; (5) soft
+flicks (0.7) never detach the block — same ~0.85 threshold T3 found.
+**Open problem: launch repeatability** (within-bucket scatter still
+10–20 cm vs the ~5 cm slot needs). The route mechanism itself works (block
+enters the chosen channel 91–100%). Next iteration: strike only a settled,
+re-centered block (adds a wait state), then place slots from the cleaned
+distributions and run the gate. T3 needed eight versions; this is v5.
+
+## 🧭 Original design note: "Router" — the long-horizon dynamics task
 
 Requested: a long-horizon many-object task where dynamics change the
 outcome completely (a "make coffee" analog). Direct kitchen simulation

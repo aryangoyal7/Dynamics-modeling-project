@@ -1057,6 +1057,157 @@ class DynPushT6Env(DynBaseEnv):
         return self.compute_dense_reward(obs, action, info) / 6.0
 
 
+@register_env("RouteChoiceT7-v1", max_episode_steps=200)
+class RouteChoiceT7Env(SlideToSlotT3Env):
+    """T7 'Router' core (single block; the LIBERO-Long-shaped multi-block
+    version builds on this only if the premium gate passes).
+
+    Two parallel channels lead away from an open staging area. The LEFT
+    channel floor is slick (long slides); the RIGHT channel is grippy
+    (short slides). Each channel has its own slot, placed (from probe
+    measurements) so that ONE fixed-strength flick lands a block on the
+    left slot only for one region of physics-space and on the right slot
+    only for the complementary region. The controller's knowledge is a
+    DISCRETE ROUTE CHOICE: escort the block to a channel mouth, commit one
+    flick, retreat. Wrong route = wrong stopping point, at rest off-slot.
+    """
+
+    CH_OFF = 0.095          # channel center offsets: +y = slick, -y = grippy
+    CH_HALF = 0.06          # channel inner half-width (hand must fit: T3 uses 0.06)
+    CH_X = (-0.05, 0.50)    # floored channel span
+    DIV_X = (-0.16, 0.50)   # divider extends back: walled approach lanes, so
+                            # the windup happens confined (v2 probe: open-area
+                            # windups scatter launches over a 15-20 cm IQR)
+    STAGE_X = -0.26
+    # v1 probe: 0.9 stopped every block within 3 cm of the mouth regardless
+    # of c - a universal safe route. 0.35 keeps the right channel braking
+    # harder than the slick left while letting c decide the stop point.
+    GRIPPY_FRICTION = 0.35
+    # per-channel slot centers, set from the stopping-distribution probe
+    SLOT_L_X = 0.11
+    SLOT_R_X = 0.05
+    spawn_x_range = (-0.24, -0.20)  # behind the lanes, in the crossing zone
+
+    def _build_task(self, options: dict):
+        self.obj = build_randomized_box(
+            self, self.obj_half, self._c, name="slide_obj"
+        )
+        import sapien.physx as _physx
+        x0, x1 = self.CH_X
+        wall_t, wall_h = 0.01, 0.02
+        cx, hx = 0.5 * (self.STAGE_X + x1), 0.5 * (x1 - self.STAGE_X)
+        ccx, chx = 0.5 * (x0 + x1), 0.5 * (x1 - x0)
+        y_out = self.CH_OFF + self.CH_HALF + wall_t
+        gray = sapien.render.RenderMaterial(base_color=[0.5, 0.5, 0.5, 1])
+
+        builder = self.scene.create_actor_builder()
+        shapes = [
+            # outer rails along everything, end wall across both channels
+            ([hx, wall_t, wall_h], [cx, y_out, wall_h]),
+            ([hx, wall_t, wall_h], [cx, -y_out, wall_h]),
+            ([wall_t, y_out + wall_t, wall_h], [x1 + wall_t, 0, wall_h]),
+            # center divider along channels + approach lanes (crossing zone
+            # stays open behind DIV_X[0])
+            ([0.5 * (self.DIV_X[1] - self.DIV_X[0]),
+              self.CH_OFF - self.CH_HALF, wall_h],
+             [0.5 * (self.DIV_X[0] + self.DIV_X[1]), 0, wall_h]),
+        ]
+        for half, pos in shapes:
+            builder.add_box_collision(half_size=half, pose=sapien.Pose(p=pos))
+            builder.add_box_visual(half_size=half, pose=sapien.Pose(p=pos), material=gray)
+        builder.initial_pose = sapien.Pose()
+        self.channel = builder.build_static(name="channel")
+
+        # floors: slick left, grippy right (staging area stays plain table)
+        for y_c, fric, color, name in (
+            (self.CH_OFF, self.FLOOR_FRICTION, [0.75, 0.85, 0.95, 1], "floor_slick"),
+            (-self.CH_OFF, self.GRIPPY_FRICTION, [0.95, 0.85, 0.75, 1], "floor_grippy"),
+        ):
+            fb = self.scene.create_actor_builder()
+            fb.add_box_collision(
+                half_size=[chx, self.CH_HALF, self.FLOOR_T / 2],
+                pose=sapien.Pose(p=[ccx, y_c, self.FLOOR_T / 2]),
+                material=_physx.PhysxMaterial(fric, fric, 0.0),
+            )
+            fb.add_box_visual(
+                half_size=[chx, self.CH_HALF, self.FLOOR_T / 2],
+                pose=sapien.Pose(p=[ccx, y_c, self.FLOOR_T / 2]),
+                material=sapien.render.RenderMaterial(base_color=color),
+            )
+            fb.initial_pose = sapien.Pose()
+            setattr(self, name, fb.build_static(name=name))
+
+        # one visual slot marker per channel
+        self.slot_markers = []
+        for slot_x, y_c in ((self.SLOT_L_X, self.CH_OFF), (self.SLOT_R_X, -self.CH_OFF)):
+            b = self.scene.create_actor_builder()
+            b.add_box_visual(
+                half_size=[self.slot_half_width, self.CH_HALF, 6e-4],
+                material=sapien.render.RenderMaterial(base_color=[0.1, 0.7, 0.1, 1]),
+            )
+            b.initial_pose = sapien.Pose(p=[slot_x, y_c, self.FLOOR_T + 1e-3])
+            self.slot_markers.append(b.build_kinematic(name=f"slot_{len(self.slot_markers)}"))
+        self.slot_marker = self.slot_markers[0]  # parent-class compatibility
+
+        n = self.num_envs
+        self._phase = torch.zeros(n, dtype=torch.long, device=self.device)
+        self._attempts = torch.zeros(n, device=self.device)
+        self._needed_dir = torch.zeros(n, device=self.device)
+        self._rec_correct = -torch.ones(n, device=self.device)
+        self._prev_moving = torch.zeros(n, dtype=torch.bool, device=self.device)
+
+    def _init_task(self, env_idx: torch.Tensor):
+        b = len(env_idx)
+        xyz = torch.zeros((b, 3), device=self.device)
+        lo, hi = self.spawn_x_range
+        if self.deterministic_spawn:
+            xyz[:, 0] = -0.22
+        else:
+            xyz[:, 0] = torch.rand(b, device=self.device) * (hi - lo) + lo
+            xyz[:, 1] = (torch.rand(b, device=self.device) * 2 - 1) * 0.03
+        xyz[:, 2] = self.obj_half + self.FLOOR_T
+        q = torch.zeros((b, 4), device=self.device)
+        q[:, 0] = 1.0
+        self.obj.set_pose(Pose.create_from_pq(p=xyz, q=q))
+        self.obj.set_linear_velocity(torch.zeros((b, 3), device=self.device))
+        self.obj.set_angular_velocity(torch.zeros((b, 3), device=self.device))
+        self._phase[env_idx] = 0
+        self._attempts[env_idx] = 0
+        self._needed_dir[env_idx] = 0
+        self._rec_correct[env_idx] = -1
+        self._prev_moving[env_idx] = False
+
+    def evaluate(self):
+        p = self.obj.pose.p
+        in_left = p[:, 1] > self.CH_OFF - self.CH_HALF
+        in_right = p[:, 1] < -(self.CH_OFF - self.CH_HALF)
+        d_left = (p[:, 0] - self.SLOT_L_X).abs()
+        d_right = (p[:, 0] - self.SLOT_R_X).abs()
+        on_slot = (in_left & (d_left < self.slot_half_width)) | \
+                  (in_right & (d_right < self.slot_half_width))
+        dist = torch.where(in_right, d_right, d_left)
+        speed = torch.linalg.norm(self.obj.linear_velocity, dim=1)
+        static = speed < self.static_vel
+        tcp_dist = self._tcp_to_obj_dist()
+        released = tcp_dist > self.release_dist
+        self._prev_moving = speed > self.static_vel
+        return dict(
+            success=on_slot & static & released,
+            in_slot=on_slot,
+            obj_static=static,
+            released=released,
+            obj_to_slot_dist=dist,
+            tcp_to_obj_dist=tcp_dist,
+            obj_speed=speed,
+            attempt_count=self._attempts.clone(),
+            first_recovery_correct=self._rec_correct.clone(),
+        )
+
+    def _task_state_obs(self):
+        return dict(slot_pos=torch.cat(
+            [m.pose.p[:, :2] for m in self.slot_markers], dim=1))
+
+
 # =========================================================================== #
 # Teacher twins: identical tasks with c exposed in the observation.           #
 # =========================================================================== #
@@ -1087,4 +1238,7 @@ CliffTossT5TeacherEnv = register_env("CliffTossT5Teacher-v1", max_episode_steps=
 )
 DynPushT6TeacherEnv = register_env("DynPushT6Teacher-v1", max_episode_steps=150)(
     _teacher(DynPushT6Env)
+)
+RouteChoiceT7TeacherEnv = register_env("RouteChoiceT7Teacher-v1", max_episode_steps=200)(
+    _teacher(RouteChoiceT7Env)
 )
