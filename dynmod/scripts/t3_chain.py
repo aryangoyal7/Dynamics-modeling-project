@@ -25,9 +25,20 @@ import sys
 import time
 
 PY = sys.executable
-RUN = "runs/t3-teacher-v7"
+RUN = "runs/t3-teacher-v8"
 DATA = "/mnt/scratch/dynamics/data"
 CM = "pd_ee_delta_pos"
+
+
+BACKUP = "/home/azureuser/cloudfiles/code/Users/garyan18/dynamics_modeling/scratch_backup"
+
+def backup(path):
+    """Copy an artifact to persistent storage immediately (external machine
+    stops have twice destroyed un-backed scratch work)."""
+    import shutil
+    dst = os.path.join(BACKUP, "data", os.path.basename(path))
+    print(f"[chain] backing up {path} -> {dst}", flush=True)
+    shutil.copytree(path, dst, dirs_exist_ok=True)
 
 
 def sh(cmd, gpu=None, bg=False):
@@ -96,9 +107,11 @@ def main():
     sh([PY, "-m", "dynmod.scripts.rollout_harness", "--ckpt", ck,
         "--episodes", "1000", "--num-envs", "250", "--seed", "0",
         "--control-mode", CM, "--out", f"{DATA}/t3_1e3"], gpu=4)
+    backup(f"{DATA}/t3_1e3")
     sh([PY, "-m", "dynmod.scripts.rollout_harness", "--ckpt", ck,
         "--episodes", "10000", "--num-envs", "250", "--seed", "10000",
         "--control-mode", CM, "--out", f"{DATA}/t3_1e4"], gpu=4)
+    backup(f"{DATA}/t3_1e4")
 
     sh([PY, "-m", "dynmod.policy.train", "--data", f"{DATA}/t3_1e4",
         "--arm", "A", "--seed", "0", "--steps", "60000",
@@ -121,10 +134,14 @@ def main():
         "--scales", "1e3", "1e4", "--seeds", "10",
         "--gpus", "0", "1", "2", "5", "7", "--jobs-per-gpu", "3"])
     p_1e5.wait()
+    backup(f"{DATA}/t3_1e5")
     sh([PY, "-m", "dynmod.scripts.launch_main_arms", "--prefix", "t3",
         "--scales", "1e3", "1e4", "1e5", "--seeds", "10",
         "--gpus", "0", "1", "2", "4", "5", "6", "7", "--jobs-per-gpu", "3"])
-    print("[chain] COMPLETE: all T3 arms trained.", flush=True)
+    import shutil
+    shutil.copytree("/mnt/scratch/dynamics/policy_runs",
+                    os.path.join(BACKUP, "policy_runs"), dirs_exist_ok=True)
+    print("[chain] COMPLETE: all T3 arms trained and backed up.", flush=True)
 
 
 if __name__ == "__main__":

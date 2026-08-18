@@ -179,6 +179,48 @@ def build_randomized_box(
     return merged
 
 
+def build_randomized_tee(
+    env, c: dict, name: str = "tee", base_density: float = 1000.0
+) -> Actor:
+    """T-shaped block (Push-T style: crossbar + stem, lying flat), one per
+    env with per-env friction material, density (mass_mult) and COM offset.
+    Local frame: crossbar centered at the origin, long along y; stem extends
+    +x. Geometric centroid sits at x ~ +0.026, and the hidden COM offset is
+    applied on top of the natural one - for a T the COM governs how any push
+    splits into translation vs rotation, which is what makes the task a
+    continuous dynamics-identification problem rather than a one-shot force
+    calibration.
+    """
+    BAR_HALF = [0.015, 0.06, 0.02]
+    STEM_HALF = [0.045, 0.015, 0.02]
+    STEM_POSE = sapien.Pose(p=[0.06, 0.0, 0.0])
+    scene = env.scene
+    tees = []
+    for i in range(env.num_envs):
+        builder = scene.create_actor_builder()
+        mat = physx.PhysxMaterial(
+            static_friction=float(c["friction"][i]),
+            dynamic_friction=float(c["friction"][i]),
+            restitution=0.0,
+        )
+        density = float(base_density * c["mass_mult"][i])
+        builder.add_box_collision(half_size=BAR_HALF, material=mat, density=density)
+        builder.add_box_collision(half_size=STEM_HALF, pose=STEM_POSE,
+                                  material=mat, density=density)
+        vis = sapien.render.RenderMaterial(base_color=OBJ_COLOR)
+        builder.add_box_visual(half_size=BAR_HALF, material=vis)
+        builder.add_box_visual(half_size=STEM_HALF, pose=STEM_POSE, material=vis)
+        builder.set_scene_idxs([i])
+        builder.initial_pose = sapien.Pose(p=[0, 0, BAR_HALF[2]])
+        tee = builder.build(name=f"{name}_{i}")
+        env.remove_from_state_dict_registry(tee)
+        tees.append(tee)
+    merged = Actor.merge(tees, name=name)
+    env.add_to_state_dict_registry(merged)
+    _apply_com_offset(merged, c, half_width=0.06)
+    return merged
+
+
 def build_randomized_cup(
     env,
     c: dict,

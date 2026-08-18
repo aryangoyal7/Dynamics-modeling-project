@@ -1,0 +1,6 @@
+{
+ "teacher": "scripted-caware-calibration-v4",
+ "flatness_report": "reports/flat_scripted_aware_v4.json",
+ "mean": 0.634,
+ "spread": 0.072
+}

@@ -1,5 +1,155 @@
 # Project Progress
 
+## ✅ T3 TEACHER CERTIFIED — pipeline running (2026-08-18, evening)
+
+After two calibration rounds, the scripted physics-aware teacher **passed
+both quality gates**: average success **0.634** (bar ≥ 0.55) and worst
+per-axis unevenness **0.072** (bar ≤ 0.10) — report
+`flat_scripted_aware_v4.json`. The winning fix was recalibrating the flick
+table at full 5×4 physics-grid resolution with a wider search (5 speeds ×
+4 run-up lengths, 128 episodes per cell). The RL teachers never got close
+(v8 grid mean 0.36; v9 touched 0.578 once mid-training but oscillated back
+to ~0.40 — both checkpoint sets kept in `runs/`). Chain 2
+(`t3_chain2.py`) now runs the rest of the plan: 10^3/10^4 datasets in
+parallel (each backed up on completion), the base-must-fail-far-out check,
+then the 10-seed arm matrix plus 10^5 generation.
+
+## ❌ T1 dump-pour verdict: no physics premium — redesigned as MEASURED pour
+
+With the pour fixed (low, aimed, decisive — nominal success 0.75 after the
+geometry sweep), the gate came back healthy but null: blind **82.0%**,
+aware **77.1%**, premium **−4.9 ± 6.3** (statistically zero). The reason is
+structural: success only requires ≥80% of contents in the basin, so
+over-tilting costs nothing and one fixed "dump it all" tilt works for every
+physics. Knowledge can't pay when overshoot is free — the same lesson as
+T2, discovered honestly by the gate.
+
+**New test (from these lessons): the measured pour.** Success = ending with
+**35–65% of contents transferred** (pour half, keep half). Over-pour is now
+irreversible failure, and how much comes out per degree of tilt depends on
+fill and content friction — that dependence is the knowledge being priced.
+
+**Measured-pour verdict (2026-08-18, 20:20): also zero — T1 DESCOPED.**
+Blind 14.8%, aware 17.6%, premium **+2.7 ± 6.2**. The decisive detail: even
+with exact knowledge and per-bucket tuning under FIXED physics, the
+calibrated controller hits the band only 19–47% of the time — the amount
+poured is dominated by granular chaos, not knowable physics. Three
+independent granular measurements (T2 carry, T1 dump, T1 measured) all
+found no premium: in this simulator, granular outcomes are too noisy for
+physics knowledge to price into. The study drops granular tasks entirely.
+
+## 🆕 T6 "hidden-physics Push-T" (2026-08-18, night) — the in-action task
+
+**T5 was dropped by user decision**: a one-shot calibrated toss tests
+"learning a distribution of force," not understanding dynamics — the robot
+should have time to observe and correct DURING the action. Per the same
+direction, the replacement is modeled on an established benchmark rather
+than invented: **Push-T** (diffusion-policy / ManiSkill), pushing a
+T-shaped block into a target position AND orientation through many small
+contacts. Our version (`DynPushT6-v1`) hides physics in the T: mass,
+friction, and center of mass — and for a T, the COM decides how every push
+splits into translation vs rotation, so a wrong internal model shows up as
+over/under-rotation that costs correction time against a 150-step budget.
+This finally makes the COM axis decisive (it was flat in T3 and
+undecodable in T4). No anti-cheat geometry needed: a POSE cannot be
+escorted, only shaped through contact dynamics.
+
+First probe passed immediately (unique among all tasks): blind controller
+50% at nominal physics, errors right at tolerance. Premium gate running:
+blind assumes the COM is at the centroid; aware pushes through the TRUE
+COM with per-bucket speeds.
+
+**Gate iterations (2026-08-18, night).** v1 (loose tolerance): premium
+zero — per-step feedback lets the blind pusher identify the COM by
+watching, and ±0.25 rad of yaw tolerance forgives its mistakes. v2 (COM
+range widened to ±2.4 cm, time-to-success measured): still zero on every
+axis, even speed. This is itself a finding: with corrections available and
+loose goals, feedback fully substitutes for knowledge — the reason the
+plan's original tasks were commitment-based. v3 (precision regime: 1.5 cm
+/ 0.12 rad tolerance, so a wrong-COM push near the goal overshoots the
+tolerance and costs a full correction cycle): **first directionally
+positive result — all four metrics favor aware** (success +2.9,
+success@100 +4.5, success@75 +2.3, median steps 80.5 vs 93) but not yet
+significant at ±6.2. A 4×-power rerun (CI ±3.1) is running to settle it.
+
+## 🚧 T5 "cliff toss" — DESCOPED (user decision; kept for reference)
+
+Replacement second task, rigid-body like the tasks that worked. The object
+starts on a slick deck 10 cm above the table; the controller charge-flicks
+it off the cliff; flight range (launch speed vs mass/friction) and the
+table's friction braking decide where it stops; success = at rest on the
+slot, hand away, no recovery allowed after the edge. Design note: the
+elaborate anti-cheat roofs T3 needed existed to stop RL teachers from
+reward-hacking — with the now-standard scripted teacher there is no hacker
+to fence out, so T5's geometry is clean. Env `CliffTossT5-v1` + gate
+`premium_gate_t5.py` (running). Bars as always: healthy success, premium
+clearly positive.
+
+## 🧭 Designed, not built: T6 "Router" — the long-horizon dynamics task
+
+Requested: a long-horizon many-object task where dynamics change the
+outcome completely (a "make coffee" analog). Direct kitchen simulation
+fails our own evidence twice (granular/liquid = chaos kills the premium;
+recoverable steps = controllers correct instead of commit). The design that
+keeps the spirit measurable: **three blocks, each with hidden physics, and
+two routes to the goal** — a launch ramp only light/slippery blocks can
+survive, and a friction corridor where light blocks overshoot into a dead
+zone but heavy ones stop correctly. The right ROUTE per block depends on
+its hidden c; a mis-routed block clogs that route for the rest, so one
+wrong physics judgment changes the whole episode's outcome. Knowledge here
+is discrete (plan choice), not a tuned magnitude — a qualitatively new test
+of whether prediction heads help strategy selection. Build candidate after
+the T5 verdict and T3 arms; every component reuses validated geometry.
+
+## Fourth machine wipe (2026-08-18 ~19:55)
+
+Scratch wiped again; zero loss (all verdicts/reports on persistent storage,
+datasets backed up as generated). The rebuild recipe now lives permanently
+at `dynamics_modeling/rebuild_env.sh` (~6 min). **The Azure auto-stop /
+restart schedule on this machine is still active — please disable it.**
+
+## Third machine wipe + both verdicts landed (2026-08-18, midday)
+
+The machine was externally restarted a THIRD time (~11:37), wiping
+/mnt/scratch again. Nothing important was lost: teacher checkpoints live on
+persistent storage (`runs/`), all datasets were backed up the moment they
+were generated (3.6 GB in `scratch_backup/`), and both pending verdicts had
+already been written to `reports/` before the crash. The environment was
+rebuilt in 6 minutes from a saved recipe. **Please disable the Azure
+auto-stop schedule on this machine — each wipe costs about an hour.**
+
+**T3 teacher verdict: the RL teacher FAILED the quality bar.** Teacher v8
+finished all 40M steps (09:28) and the automated chain evaluated its best
+four checkpoints across the physics range: best mean success **0.36**
+(bar: ≥ 0.55), spread 0.11 (bar: ≤ 0.10). The eval curve had plateaued at
+0.39–0.42. The chain stopped itself instead of generating datasets from a
+weak teacher — exactly what it is designed to do. Note the task itself is
+fine (validated +16.7); it is the RL teacher that can't yet do it well.
+
+**Plan (running in parallel now):**
+1. **Scripted calibrated teacher (new, favored).** The physics-aware scripted
+   controller that measured **61.7%** during validation is above the 0.55
+   bar. It is rebuilt as a permanent script
+   (`dynmod/scripts/scripted_teacher_t3.py`: same expert, but flick speed +
+   run-up looked up from the true physics via the saved calibration table)
+   and is being run through the SAME flatness gate as any RL teacher
+   (GPU 4). If it passes both bars it becomes the main-dataset teacher —
+   its actions depend on the true physics, which is all the experiment
+   requires of a teacher.
+2. **PPO v9 (insurance).** Another 40M-step fine-tune from v8's final
+   checkpoint (GPU 2, ~11 h). Killed if option 1 certifies first.
+
+**T1 verdict: gate result unusable — floor effect.** The pouring gate
+finished before the crash: blind 2.5%, aware 3.1%, premium +0.6 ± 6.3. Both
+controllers succeed almost NEVER under full physics randomization (they had
+real success in calibration, where only fill and content friction varied).
+When success is ~3% the gate can't measure knowledge — the pour script is
+too fragile, not necessarily the task. A per-axis diagnostic is running
+(GPU 3): same fixed pour, one physics axis randomized at a time, to find
+which axis breaks it. Then: one fair fix for both controllers and a gate
+rerun — or descope with numbers if the premium is still zero at healthy
+success rates.
+
 ## Task-set decision (2026-08-18): T2 removed
 
 The validity gate measured T2's physics-knowledge premium at **+1.2 ± 5.1

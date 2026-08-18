@@ -1,0 +1,30 @@
+{
+ "nominal": {
+  "success": 0.001953125,
+  "episodes": 512
+ },
+ "mass_mult": {
+  "success": 0.001953125,
+  "episodes": 512
+ },
+ "friction": {
+  "success": 0.0,
+  "episodes": 512
+ },
+ "com_frac": {
+  "success": 0.001953125,
+  "episodes": 512
+ },
+ "handle_offset": {
+  "success": 0.001953125,
+  "episodes": 512
+ },
+ "particle_count": {
+  "success": 0.005859375,
+  "episodes": 512
+ },
+ "pp_friction": {
+  "success": 0.001953125,
+  "episodes": 512
+ }
+}

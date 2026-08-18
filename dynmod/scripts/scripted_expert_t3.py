@@ -43,7 +43,7 @@ FLICK_FROM_X = -0.01  # escort the object here, then commit the fixed flick.
 # speed and dies underneath). ~9cm of runway lets the EE build real momentum.
 
 
-def policy(base, act_dim: int) -> torch.Tensor:
+def policy(base, act_dim: int, flick_speed=None, flick_standoff=None) -> torch.Tensor:
     """One batched action from privileged-free quantities (poses only).
 
     Tunnel-era strategy: escort the object to just before the tunnel mouth,
@@ -52,9 +52,17 @@ def policy(base, act_dim: int) -> torch.Tensor:
     condition. Overshoots are recovered by creep-pushing back in the open
     region past the slot; deep undershoots stop under the tunnel roof and
     are honestly unrecoverable.
+
+    flick_speed / flick_standoff: optional per-env (n,) tensors. The c-aware
+    calibrated teacher (scripted_teacher_t3) passes values looked up from the
+    true c; left as None the flick is the fixed c-blind one.
     """
     device = base.device
     n = base.num_envs
+    if flick_speed is None:
+        flick_speed = torch.full((n,), FLICK_SPEED, device=device)
+    if flick_standoff is None:
+        flick_standoff = torch.full((n,), FLICK_STANDOFF, device=device)
     tcp = base.agent.tcp.pose.p
     obj = base.obj.pose.p
     slot_x = base.slot_marker.pose.p[:, 0]
@@ -75,7 +83,7 @@ def policy(base, act_dim: int) -> torch.Tensor:
     # the flick is a CHARGE: retreat to a far standoff, then drive at full
     # speed so the strike happens with the EE already moving (striking from
     # a near standstill enters the tunnel at ~0.4 m/s and dies underneath)
-    standoff = torch.where(flicking, torch.full_like(dx, FLICK_STANDOFF),
+    standoff = torch.where(flicking, flick_standoff,
                            torch.full_like(dx, BEHIND))
     behind = obj.clone()
     behind[:, 0] -= direction * standoff
@@ -98,7 +106,7 @@ def policy(base, act_dim: int) -> torch.Tensor:
     goto = torch.clip((target - tcp) / 0.1, -1.0, 1.0)
     # mode 3: at the standoff -> push. Speed is the FIXED flick when
     # launching through the tunnel, else the slow creep.
-    speed = torch.where(flicking, torch.full_like(dx, FLICK_SPEED),
+    speed = torch.where(flicking, flick_speed,
                         torch.full_like(dx, PUSH_SPEED))
     push = torch.zeros_like(tcp)
     push[:, 0] = direction * speed

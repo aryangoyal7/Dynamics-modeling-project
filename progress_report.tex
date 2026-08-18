@@ -23,7 +23,7 @@
 \title{\textbf{Dynamics-Modeling Study: Progress Report}\\[2pt]
 \large Does predicting object motion make robot policies robust to changed physics?}
 \author{}
-\date{2026-08-18 \quad (build sessions: 2026-08-16 to 2026-08-18)}
+\date{2026-08-18, night update \quad (build sessions: 2026-08-16 to 2026-08-18)}
 
 \begin{document}
 \maketitle
@@ -36,12 +36,22 @@ afterwards). Test both under physics they never saw (heavier, slipperier objects
 If the prediction-trained one degrades more slowly, run controlled follow-ups to find
 out \emph{why}. Every claim is protected by pre-registered rules and go/no-go gates.
 
+\textbf{Status tonight:} the control task (T4) is complete with its pre-registered
+result; the primary task (T3) is validated, its teacher certified, and the full
+120-run training matrix is training across all eight GPUs with evaluations following
+each run automatically --- first A-vs-B evidence lands within hours. Two granular
+tasks were measured invalid and honestly descoped; a new in-action task (T6, built
+on the established Push-T benchmark) is in gate iterations.
+
 \subsection*{Glossary}
 \begin{itemize}
 \item \textbf{c} --- the hidden physics of an episode (mass, friction, off-center
 weight). The robot feels c but is never told it.
-\item \textbf{Teacher} --- a reinforcement-learning agent trained \emph{with} c
-visible. It generates expert demonstrations; student policies imitate them blind.
+\item \textbf{Teacher} --- a controller that acts \emph{with} c visible and
+generates expert demonstrations; student policies imitate them blind. Originally
+an RL agent; on T3 the certified teacher is now a physics-calibrated scripted
+controller (Section~6) --- what matters is that its actions depend on the true c
+and pass the same quality gates.
 \item \textbf{$\delta$ grid} --- 210 physics settings outside the training range,
 used to measure how fast a policy breaks as physics drift.
 \item \textbf{Gate} --- a pre-planned go/no-go check. Skipping one silently
@@ -61,7 +71,8 @@ Machine: 8$\times$ NVIDIA A100 80\,GB, 96 CPU cores, 1.7\,TB RAM.
 Mass multiplier & 0.7--1.4 (log-uniform) & 0.3, 0.5, 1.0, 1.6, 2.2, 3.0, 4.5 \\
 Surface friction & 0.3--0.7 (log-uniform) & 0.1, 0.2, 0.5, 0.9, 1.2, 1.8 \\
 COM offset (frac.\ of half-width) & 0--0.15 (uniform) & 0, 0.10, 0.25, 0.40, 0.60 \\
-Granular extras (T1/T2) & 20--30 balls; ball friction 0.2--0.8 & --- (later tier) \\
+Granular extras (T1/T2) & 20--30 balls; ball friction 0.2--0.8 & (tasks descoped, Sec.~8) \\
+COM offset, T6 tee & 0--0.4 (uniform; task-specific) & --- (gate stage) \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -85,11 +96,13 @@ mattering, by design.}
 \centering
 \includegraphics[width=0.48\textwidth]{figs/t1_pour.png}\hfill
 \includegraphics[width=0.48\textwidth]{figs/t2_carry.png}
-\caption{\textbf{Left, T1 pouring:} tilt the held cup so its 20--30 balls fall into
-the basin --- outflow lags the tilt. One tile shows the grip slipping: a real failure
-mode. \textbf{Right, T2 carrying:} the ball-filled mug hangs from the gripper by its
-handle; the robot's own acceleration excites the sloshing it must survive. (Harder
-tier; environments built and smoke-tested, taken up after T3 reports.)}
+\caption{\textbf{Left, T1 pouring; right, T2 carrying --- both now DESCOPED with
+measured evidence} (Section~8): T2's hanging mug is a natural shock absorber
+(knowledge premium $+1.2\pm5.1$, i.e.\ zero), and pouring showed zero premium in
+both the dump variant ($-4.9\pm6.2$ at healthy 82\% success) and the
+measured-amount variant ($+2.7\pm6.2$) --- granular outcomes in this simulator
+are chaos-dominated, so no controller can profit from knowing the physics.
+Environments remain in the repo, marked unused.}
 \end{figure}
 
 \begin{tabular}{@{}p{7.2cm}p{7.6cm}@{}}
@@ -168,10 +181,10 @@ c goes to a separate metadata file, one row per episode.
 \textbf{Dataset} & \textbf{Episodes} & \textbf{Transitions} & \textbf{Size} & \textbf{Status} \\
 \midrule
 T4 teacher demos & 10{,}000 & 0.8M & 415\,MB & complete, verified (99.7\% success) \\
-T3 teacher demos $10^3$/$10^4$ & 11{,}000 & 2.2M & 1.07\,GB & \emph{invalidated by tunnel; regenerate} \\
-T3 teacher demos $10^5$ & 100{,}000 & 20M & $\sim$10\,GB & regenerate after new teacher \\
-c-blind set $10^3$/$10^4$ & 11{,}000 & 2.2M & 1.03\,GB & \emph{invalidated; expert rebuilt, ready} \\
-Scripted warm-start set & 4{,}000 & 0.8M & 375\,MB & complete (46\% success, tunnel era) \\
+T3 teacher demos $10^3$/$10^4$ & 11{,}000 & 2.2M & 1.07\,GB & \textbf{complete} (certified teacher; 66.3\%/64.0\% success), backed up \\
+T3 teacher demos $10^5$ & 100{,}000 & 20M & $\sim$10\,GB & generating now (GPU 6) \\
+c-blind set $10^3$/$10^4$ (final geometry) & 11{,}000 & 2.2M & 0.94\,GB & \textbf{complete}, backed up \\
+Scripted warm-start set & 4{,}000 & 0.8M & 375\,MB & complete (fed the RL warm starts) \\
 Vision variant ($10^4$, 128$\times$128 RGB) & 10{,}000 & 2M & $\sim$1\,TB & pipeline verified; generate at vision stage \\
 Evaluation manifest & 210{,}000 & --- & --- & fixed episode seeds, all arms identical \\
 \midrule
@@ -180,7 +193,7 @@ Evaluation manifest & 210{,}000 & --- & --- & fixed episode seeds, all arms iden
 \end{tabular}
 \end{center}
 
-\section{Teachers: six attempts, every failure diagnosed}
+\section{Teachers: nine attempts, then a paradigm change \hfill certified}
 T4 was clean first try: 99.6\% success, spread 0.03 across c (\pass{}); its
 dataset is done. T3's history \emph{is} the robustness story:
 
@@ -201,10 +214,36 @@ v3 & 4\%: a precise 24\,cm blind flick is undiscoverable by exploration noise & 
 v4 & Launch-speed reward bonus alone did not help (still 4\%) & superseded by v5 geometry \\
 v5 & Plateau at $\sim$18\%: flick technique still rare under exploration & kept running as fallback \\
 v6 & --- & \textbf{Warm start}: behavior-clone the scripted expert's successful
-flicks into the PPO network, then fine-tune with c visible. \open{}: 27\% at 6M
-steps --- already past v5's 41M-step plateau \\
+flicks into the PPO network, then fine-tune with c visible \\
+v7--v9 & Warm-started PPO climbs to eval $\sim$0.42--0.58 but oscillates; on the
+full physics grid the best checkpoints measure mean 0.36 --- far below the 0.55
+quality bar, and \emph{below the c-blind scripted controller} (0.45). 90M more
+steps (v8, v9) changed nothing & Paradigm change below \\
 \bottomrule
 \end{tabular}
+
+\subsection{The certified teacher is a calibrated script, not an RL agent}
+The task-validation controller already beat the bar: a scripted flicker whose
+launch speed and run-up length are looked up from the \emph{true} physics.
+Recalibrating its lookup table at full grid resolution ($5\times4$ physics cells,
+5 speeds $\times$ 4 run-ups, 128 episodes per cell) produced a teacher that passed
+\textbf{both} certification gates: \textbf{mean success 0.634} (bar $\ge$0.55) and
+\textbf{worst per-axis unevenness 0.072} (bar $\le$0.10) --- see
+Fig.~\ref{fig:certflat}. Nothing about the experiment requires the teacher to be
+RL: it must succeed broadly, evenly, and \emph{act on c}, which a calibration
+table does explicitly and interpretably (slippery blocks get gentler launches;
+grippy ones full speed with a long run-up). A side benefit: a scripted teacher
+cannot reward-hack, which removes one class of anti-cheat geometry from future
+task designs.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.9\textwidth]{figs/cert_teacher_flatness.png}
+\caption{Certification of the scripted teacher (v4 calibration): success across
+the training physics range, mass $\times$ friction panels at three COM levels.
+Mean 0.634, worst per-axis marginal spread 0.072 --- both bars passed.}
+\label{fig:certflat}
+\end{figure}
 
 \begin{figure}[h]
 \centering
@@ -231,8 +270,66 @@ directions survive. Verified: identical launches now spread outcomes across
 \textbf{17\,cm}. Follow-on mechanics, found cheaply with the scripted expert:
 launches need a \emph{run-up} (a strike from standstill enters at half speed and
 dies under the roof at every strength); with a 13\,cm charge, one \emph{fixed}
-flick reaches 43--46\% success. That controller became both the rebuilt c-blind
-demonstrator and v6's warm start.
+flick reaches 43--46\% success.
+
+Two more measured exploits completed the design. \textbf{Overshoot-escort}: a
+deliberate overshoot could be walked back by contact, physics-free --- measured as
+a c-aware flick beating a c-blind one by \emph{nothing}; fixed by a second roof
+past the slot, so both failure directions are committed. \textbf{Command
+saturation}: heavy/grippy blocks capped every controller at 19--22\% (the arm
+could not launch them) --- fixed by a deliberately slick channel floor, restoring
+authority while preserving the full relative spread of block friction.
+\textbf{Final validation (3{,}000+ episodes)}: a controller told the true physics
+succeeds \textbf{61.7\%} vs \textbf{45.0\%} for the same controller with one fixed
+launch --- a $+16.7\pm3.6$-point knowledge premium. That gap is what the main
+experiment asks policies to learn from demonstrations.
+
+\section{Task verdicts: the knowledge-premium gate as a standing test}
+The escorting episode produced a standing rule: \emph{before any teacher or
+dataset investment, a task must show that a physics-aware controller beats a
+physics-blind one} at healthy success rates. Every task has now faced it:
+
+\begin{center}
+\begin{tabular}{@{}llll@{}}
+\toprule
+\textbf{Task} & \textbf{Premium (aware $-$ blind)} & \textbf{Verdict} \\
+\midrule
+T3 slide-to-slot & $+16.7 \pm 3.6$ (61.7 vs 45.0\%) & \pass{} --- primary task \\
+T4 pick-and-place & none by design & control task (complete) \\
+T2 carrying & $+1.2 \pm 5.1$ & \fail{} --- removed (mug = shock absorber) \\
+T1 pouring (dump) & $-4.9 \pm 6.2$ (at 82\% success) & \fail{} --- over-pouring is free \\
+T1 pouring (measured amount) & $+2.7 \pm 6.2$ & \fail{} --- granular chaos dominates \\
+T5 cliff toss & (built, then dropped by decision) & one-shot force $\ne$ dynamics understanding \\
+T6 Push-T, loose tolerance & $-2.0$ to $-3.7 \pm 6.2$ & feedback substitutes for knowledge \\
+T6 Push-T, precision regime & $+2.3$ to $+4.5 \pm 6.2$; faster (80.5 vs 93 steps) & \open{} --- 4$\times$-power rerun \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Two design laws emerged, both measured rather than assumed. (1)~\textbf{Both
+failure directions must cost something}: wherever overshoot or a redo is free
+(T1 dump, T2, pre-roof T3), one fixed blind action ties the physics-aware
+ceiling. (2)~\textbf{Free correction erases knowledge}: T6's blind pusher
+identifies the physics \emph{by watching the object respond}, so explicit
+knowledge only pays where tolerances are tight enough that a wrong-model push
+near the goal costs a full correction cycle. T6 (\texttt{DynPushT6-v1}) is
+modeled on the established Push-T benchmark with hidden mass/friction/COM on the
+tee --- the first task where the COM axis is decisive, and the only one whose
+controller family worked on the first probe (50\% nominal).
+
+\section{First pre-registered result: the control task behaves \hfill complete}
+All 60 T4 arms trained (A, B$\times$3 targets, B-shuffled, C $\times$ 10 seeds;
+zero failures) and evaluated on the $\delta$ grid. \textbf{A-vs-B degradation
+slopes are statistically identical on every tag} (e.g.\ composition
+$+0.0113\pm0.0009$ vs $+0.0115\pm0.0014$; all CIs overlap): on a task where
+physics cannot matter, the prediction head changes nothing --- the specificity
+control passes, certifying the train$\to$evaluate$\to$slope pipeline at 10-seed
+power. The probes add the mechanism: \textbf{B's trunk decodes twice the mass
+information of A's} (ridge $R^2$ 0.53--0.59 vs 0.27--0.31) while the shuffled
+control sits at A's level --- the prediction \emph{content} injects physics
+knowledge into the network --- and friction/COM stay undecodable, physically
+correct for a grasped object. Together: \emph{knowledge without effect}, exactly
+what a control task should show.
 
 \section{Measurement tools, validated the hard way}
 Probes (small readouts measuring how much physics knowledge a policy's internals
@@ -268,24 +365,35 @@ launches --- absorbed by many episodes per grid point.
 (this report, \texttt{PROGRESS.md}); task/protocol changes only before arm launch.
 \end{itemize}
 
-\section{Status, compute, and what remains}
-Measured throughput: simulation $\sim$13k env-steps/s per GPU (PPO);
-one student run $\sim$20\,min; one full $\delta$-grid evaluation (210 points
-$\times$ 20 episodes) $\sim$10\,min. Launcher packs 3 runs per 80\,GB GPU
-$\times$ 8 GPUs $=$ 24 concurrent.
+\section{Status: everything runs in parallel tonight}
+Live allocation across the 8 GPUs (as of this update): five GPUs train the
+\textbf{T3 arm matrix} --- A, B (one-step / multi-step / latent), B-shuffled, C
+$\times$ 10 seeds $\times$ $10^3$/$10^4$ demonstrations, 150k steps each, 15
+concurrent (the earlier 60k quick-train left students too weak: 22.5\% vs the
+teacher's 64\%); one GPU generates the $10^5$ dataset; one trains the
+base-fails gate policy (now informational --- its failure mode would extend the
+\emph{evaluation} grid, not change training); one runs the T6 gate and the
+\textbf{evaluate-as-they-finish loop}, which grid-evaluates every arm the moment
+its training ends and runs all slope comparisons automatically when the matrix
+drains.
 
 \begin{enumerate}[leftmargin=1.6em,itemsep=0.1em]
-\item \open{} Teacher v6 (warm-started) vs v5 (fallback); first to pass the
-flatness gate becomes the data factory.
-\item Regenerate T3 datasets ($10^3$/$10^4$/$10^5$) and the c-blind set ($\sim$2\,h).
-\item Fresh arm A $\to$ re-run the decisive gate: it must now \emph{fail} at
-extreme physics. (If not: extend the grid or shorten history, per plan.)
-\item The 180-run matrix (6 arm variants $\times$ 10 seeds $\times$ 3 data scales,
-$\sim$3\,h) $\to$ evaluations ($\sim$6\,h) $\to$ slope comparison $=$ headline answer.
-\item $\lambda$ sweep (100 runs); substitution arms (240 runs) only if the effect
-exists; probes + emergence curves from the log-spaced checkpoints.
-\item Later tier: T1/T2 teachers, vision-based arms ($\sim$1\,TB data step).
+\item \open{} First A-vs-B evidence (10 A seeds vs 5 B seeds, $10^3$ scale):
+$\sim$5--6\,h from launch. Full T3 slope answer (the headline test): $\sim$20\,h.
+\item \open{} T6 high-power precision gate ($\pm$3.1 CI); if the premium holds,
+T6 gets the same automated pipeline (teacher $\to$ datasets $\to$ arms).
+\item Then: $\lambda$ sweep (100 runs); substitution arms only if the effect
+exists; probes + emergence curves from the log-spaced checkpoints; vision arms
+($\sim$1\,TB data step) later.
 \end{enumerate}
+
+\textbf{Infrastructure note}: the machine was externally restarted \emph{four
+times} on 2026-08-18 alone, wiping the scratch disk each time. Nothing was lost:
+every dataset is copied to persistent storage the moment it is generated, all
+gate verdicts and checkpoints live on persistent storage, and a saved recipe
+rebuilds the environment in 6 minutes. A supervisor backs everything up and
+powers the machine down when work drains. \textbf{The Azure auto-stop schedule
+should be disabled} so the overnight matrix can finish.
 
 \textbf{Where things live}: code \texttt{dynmod/} (README maps every plan item to a
 file); gates \texttt{reports/}; rules \texttt{configs/}; running log

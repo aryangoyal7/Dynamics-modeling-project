@@ -43,6 +43,7 @@ from dynmod.envs.randomization import (
     build_particles,
     build_randomized_box,
     build_randomized_cup,
+    build_randomized_tee,
     c_matrix,
     graveyard_pose,
     resolve_c,
@@ -86,7 +87,7 @@ class DynBaseEnv(BaseEnv):
         self.randomize_c = randomize_c
         self.c_override = c_override
         self.deterministic_spawn = deterministic_spawn
-        self.c_spec = CTrainSpec()
+        self.c_spec = CTrainSpec(**getattr(self, "C_SPEC_KW", {}))
         self._c = None
         super().__init__(*args, robot_uids=robot_uids, **kwargs)
 
@@ -831,6 +832,231 @@ class PickPlaceT4Env(DynBaseEnv):
         return self.compute_dense_reward(obs, action, info) / 5.0
 
 
+@register_env("CliffTossT5-v1", max_episode_steps=200)
+class CliffTossT5Env(SlideToSlotT3Env):
+    """Committed toss off a raised slick deck (added 2026-08-18 after the
+    granular T1/T2 both measured zero physics premium and were descoped).
+
+    The object starts on a slick deck 10 cm above the table. The controller
+    charge-flicks it off the cliff edge; from that moment physics owns the
+    outcome twice over: flight range scales with launch speed (which mass and
+    friction set, given a fixed strike), and after landing the plain table's
+    friction brakes the slide. Success = object at rest on the slot marker
+    with the hand released. There are no recovery regions and no roofs: this
+    task assumes a SCRIPTED c-aware teacher (the T3 finding - RL teachers
+    plateau below the quality bar while the calibrated script clears it), so
+    there is no reward-hacker to fence out with geometry. Undershoot lands
+    short, overshoot slides long - both end at rest off the slot, and the
+    controller never touches the object after the cliff.
+    """
+
+    DECK_T = 0.10           # deck top height - the cliff drop
+    DECK_X = (-0.20, 0.10)  # slick launch deck along x
+    slot_x_range = (0.24, 0.34)
+    spawn_x_range = (-0.10, -0.04)
+
+    def _build_task(self, options: dict):
+        self.obj = build_randomized_box(
+            self, self.obj_half, self._c, name="slide_obj"
+        )
+        import sapien.physx as _physx
+        x0, x1 = self.CHANNEL_X
+        d0, d1 = self.DECK_X
+        wall_t = 0.01
+        yc = self.CHANNEL_INNER_HALF_Y + wall_t
+        gray = sapien.render.RenderMaterial(base_color=[0.5, 0.5, 0.5, 1])
+
+        # slick deck: one tall static box, low-friction all over
+        dcx, dhx = 0.5 * (d0 + d1), 0.5 * (d1 - d0)
+        fb = self.scene.create_actor_builder()
+        fb.add_box_collision(
+            half_size=[dhx, self.CHANNEL_INNER_HALF_Y, self.DECK_T / 2],
+            pose=sapien.Pose(p=[dcx, 0, self.DECK_T / 2]),
+            material=_physx.PhysxMaterial(self.FLOOR_FRICTION, self.FLOOR_FRICTION, 0.0),
+        )
+        fb.add_box_visual(
+            half_size=[dhx, self.CHANNEL_INNER_HALF_Y, self.DECK_T / 2],
+            pose=sapien.Pose(p=[dcx, 0, self.DECK_T / 2]),
+            material=sapien.render.RenderMaterial(base_color=[0.75, 0.85, 0.95, 1]),
+        )
+        fb.initial_pose = sapien.Pose()
+        self.deck = fb.build_static(name="deck")
+
+        # rails along the whole run: tops only 3 cm above the deck so the
+        # wrist can dip between them (28 cm-tall rails made the push pose
+        # unreachable - probe 2026-08-18: 92% of episodes never touched the
+        # block); plus a taller end stop on the table
+        rail_hz = self.DECK_T / 2 + 0.015
+        cx, hx = 0.5 * (x0 + x1), 0.5 * (x1 - x0)
+        builder = self.scene.create_actor_builder()
+        for half, pos in [
+            ([hx, wall_t, rail_hz], [cx, yc, rail_hz]),
+            ([hx, wall_t, rail_hz], [cx, -yc, rail_hz]),
+            ([wall_t, yc + wall_t, 0.08], [x1 + wall_t, 0, 0.08]),
+        ]:
+            builder.add_box_collision(half_size=half, pose=sapien.Pose(p=pos))
+            builder.add_box_visual(half_size=half, pose=sapien.Pose(p=pos), material=gray)
+        builder.initial_pose = sapien.Pose()
+        self.channel = builder.build_static(name="channel")
+
+        # visual-only slot marker on the table
+        builder = self.scene.create_actor_builder()
+        builder.add_box_visual(
+            half_size=[self.slot_half_width, self.CHANNEL_INNER_HALF_Y, 6e-4],
+            material=sapien.render.RenderMaterial(base_color=[0.1, 0.7, 0.1, 1]),
+        )
+        builder.initial_pose = sapien.Pose(p=[0.29, 0, 1e-3])
+        self.slot_marker = builder.build_kinematic(name="slot_marker")
+
+        n = self.num_envs
+        self._phase = torch.zeros(n, dtype=torch.long, device=self.device)
+        self._attempts = torch.zeros(n, device=self.device)
+        self._needed_dir = torch.zeros(n, device=self.device)
+        self._rec_correct = -torch.ones(n, device=self.device)
+        self._prev_moving = torch.zeros(n, dtype=torch.bool, device=self.device)
+
+    def _init_task(self, env_idx: torch.Tensor):
+        b = len(env_idx)
+        xyz = torch.zeros((b, 3), device=self.device)
+        lo, hi = self.spawn_x_range
+        slo, shi = self.slot_x_range
+        if self.deterministic_spawn:
+            xyz[:, 0] = -0.06
+            slot_x = torch.full((b,), 0.5 * (slo + shi), device=self.device)
+        else:
+            xyz[:, 0] = torch.rand(b, device=self.device) * (hi - lo) + lo
+            xyz[:, 1] = (torch.rand(b, device=self.device) * 2 - 1) * 0.02
+            slot_x = torch.rand(b, device=self.device) * (shi - slo) + slo
+        xyz[:, 2] = self.obj_half + self.DECK_T
+        q = torch.zeros((b, 4), device=self.device)
+        q[:, 0] = 1.0
+        self.obj.set_pose(Pose.create_from_pq(p=xyz, q=q))
+        self.obj.set_linear_velocity(torch.zeros((b, 3), device=self.device))
+        self.obj.set_angular_velocity(torch.zeros((b, 3), device=self.device))
+        marker = torch.zeros((b, 3), device=self.device)
+        marker[:, 0] = slot_x
+        marker[:, 2] = 1e-3
+        self.slot_marker.set_pose(Pose.create_from_pq(p=marker))
+        self._phase[env_idx] = 0
+        self._attempts[env_idx] = 0
+        self._needed_dir[env_idx] = 0
+        self._rec_correct[env_idx] = -1
+        self._prev_moving[env_idx] = False
+
+
+@register_env("DynPushT6-v1", max_episode_steps=150)
+class DynPushT6Env(DynBaseEnv):
+    """Hidden-physics Push-T (added 2026-08-18 on user direction: the task
+    must reward understanding dynamics DURING the action, with time to
+    observe and correct - not a one-shot calibrated force).
+
+    Modeled on the established Push-T benchmark (diffusion-policy /
+    ManiSkill PushT-v1): push a flat T-shaped block into a target pose
+    (position AND orientation) using many small contacts. Physics runs all
+    the way through: every push splits into translation and rotation
+    according to the T's mass, surface friction, and center of mass, so a
+    wrong internal model shows up as over/under-rotation the pusher must
+    spend time correcting - and the episode budget (150 steps) is what makes
+    that time expensive. No commitment geometry is needed: the outcome is a
+    POSE, which cannot be escorted, only shaped through contact dynamics.
+    """
+
+    # precision regime (v3, 2026-08-18): at pos 0.025 / yaw 0.25 the blind
+    # feedback controller matched the aware one on success AND speed - a
+    # +/-2.4 cm COM error causes ~0.2-0.4 rad of surprise rotation per
+    # translate push, inside the old tolerance, so mistakes were free.
+    # Tightened so a wrong-COM push near the goal overshoots the tolerance
+    # and costs a full correction cycle.
+    pos_tol = 0.015
+    yaw_tol = 0.12
+    static_vel = 0.05
+    release_dist = 0.05
+    GOAL_XY = (0.05, 0.0)  # goal pose: fixed position, yaw = 0
+    spawn_r = (0.10, 0.16)  # spawn: ring around the goal, random yaw
+    # wider hidden-COM range than the rigid default (0.15): on a 15 cm tee a
+    # +/-0.9 cm COM shift was too subtle - first gate (2026-08-18) measured
+    # zero premium because blind FEEDBACK corrects small rotation surprises
+    # for free. At 0.4 the COM moves up to +/-2.4 cm, enough to make wrong
+    # push lines cost real correction time against the step budget.
+    C_SPEC_KW = dict(com_frac_max=0.4)
+
+    def _build_task(self, options: dict):
+        self.obj = build_randomized_tee(self, self._c, name="tee")
+        # flat green goal outline: same T shape, visual only
+        builder = self.scene.create_actor_builder()
+        green = sapien.render.RenderMaterial(base_color=[0.1, 0.7, 0.1, 1])
+        builder.add_box_visual(half_size=[0.015, 0.06, 6e-4], material=green)
+        builder.add_box_visual(half_size=[0.045, 0.015, 6e-4],
+                               pose=sapien.Pose(p=[0.06, 0, 0]), material=green)
+        builder.initial_pose = sapien.Pose(p=[self.GOAL_XY[0], self.GOAL_XY[1], 1e-3])
+        self.goal_marker = builder.build_kinematic(name="goal_marker")
+
+    def _init_task(self, env_idx: torch.Tensor):
+        b = len(env_idx)
+        if self.deterministic_spawn:
+            r = torch.full((b,), 0.13, device=self.device)
+            ang = torch.full((b,), np.pi / 2, device=self.device)
+            yaw = torch.full((b,), np.pi / 2, device=self.device)
+        else:
+            lo, hi = self.spawn_r
+            r = torch.rand(b, device=self.device) * (hi - lo) + lo
+            # keep spawns on the reachable side (away from the robot base -x)
+            ang = (torch.rand(b, device=self.device) * 1.5 - 0.75) * np.pi
+            yaw = (torch.rand(b, device=self.device) * 2 - 1) * np.pi
+        xyz = torch.zeros((b, 3), device=self.device)
+        xyz[:, 0] = self.GOAL_XY[0] + r * torch.cos(ang)
+        xyz[:, 1] = self.GOAL_XY[1] + r * torch.sin(ang)
+        xyz[:, 2] = 0.02
+        q = torch.zeros((b, 4), device=self.device)
+        q[:, 0] = torch.cos(yaw / 2)
+        q[:, 3] = torch.sin(yaw / 2)
+        self.obj.set_pose(Pose.create_from_pq(p=xyz, q=q))
+        self.obj.set_linear_velocity(torch.zeros((b, 3), device=self.device))
+        self.obj.set_angular_velocity(torch.zeros((b, 3), device=self.device))
+
+    def obj_yaw(self) -> torch.Tensor:
+        q = self.obj.pose.q  # (n, 4) wxyz
+        return torch.atan2(
+            2 * (q[:, 0] * q[:, 3] + q[:, 1] * q[:, 2]),
+            1 - 2 * (q[:, 2] ** 2 + q[:, 3] ** 2),
+        )
+
+    def evaluate(self):
+        p = self.obj.pose.p
+        goal = torch.tensor(self.GOAL_XY, device=self.device)
+        pos_dist = torch.linalg.norm(p[:, :2] - goal[None], dim=1)
+        yaw = self.obj_yaw()
+        yaw_err = torch.remainder(yaw + np.pi, 2 * np.pi) - np.pi
+        speed = torch.linalg.norm(self.obj.linear_velocity, dim=1)
+        static = speed < self.static_vel
+        tcp_dist = self._tcp_to_obj_dist()
+        released = tcp_dist > self.release_dist
+        pose_ok = (pos_dist < self.pos_tol) & (yaw_err.abs() < self.yaw_tol)
+        return dict(
+            success=pose_ok & static & released,
+            pose_ok=pose_ok,
+            pos_dist=pos_dist,
+            yaw_err=yaw_err,
+            obj_to_goal_dist=pos_dist,
+            tcp_to_obj_dist=tcp_dist,
+            obj_speed=speed,
+        )
+
+    def _task_state_obs(self):
+        return dict(goal_pos=self.goal_marker.pose.p)
+
+    def compute_dense_reward(self, obs: Any, action: torch.Tensor, info: Dict):
+        reaching = 1 - torch.tanh(5.0 * (info["tcp_to_obj_dist"] - 0.02).clamp(min=0))
+        pos = 1 - torch.tanh(4.0 * info["pos_dist"])
+        rot = 1 - torch.tanh(2.0 * info["yaw_err"].abs())
+        reward = 0.5 * reaching + 2.0 * pos + 2.0 * rot
+        reward[info["success"]] = 6.0
+        return reward
+
+    def compute_normalized_dense_reward(self, obs, action, info):
+        return self.compute_dense_reward(obs, action, info) / 6.0
+
+
 # =========================================================================== #
 # Teacher twins: identical tasks with c exposed in the observation.           #
 # =========================================================================== #
@@ -855,4 +1081,10 @@ CarryT2TeacherEnv = register_env("CarryT2Teacher-v1", max_episode_steps=120)(
 )
 PickPlaceT4TeacherEnv = register_env("PickPlaceT4Teacher-v1", max_episode_steps=80)(
     _teacher(PickPlaceT4Env)
+)
+CliffTossT5TeacherEnv = register_env("CliffTossT5Teacher-v1", max_episode_steps=200)(
+    _teacher(CliffTossT5Env)
+)
+DynPushT6TeacherEnv = register_env("DynPushT6Teacher-v1", max_episode_steps=150)(
+    _teacher(DynPushT6Env)
 )
