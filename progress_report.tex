@@ -301,7 +301,7 @@ T1 pouring (dump) & $-4.9 \pm 6.2$ (at 82\% success) & \fail{} --- over-pouring 
 T1 pouring (measured amount) & $+2.7 \pm 6.2$ & \fail{} --- granular chaos dominates \\
 T5 cliff toss & (built, then dropped by decision) & one-shot force $\ne$ dynamics understanding \\
 T6 Push-T, loose tolerance & $-2.0$ to $-3.7 \pm 6.2$ & feedback substitutes for knowledge \\
-T6 Push-T, precision regime & $+2.3$ to $+4.5 \pm 6.2$; faster (80.5 vs 93 steps) & \open{} --- 4$\times$-power rerun \\
+T6 Push-T, precision, high power & $-0.2$ to $+0.6 \pm 3.1$; 94 vs 90.5 steps & \fail{} --- confirmed zero (2{,}048 eps/side) \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -309,13 +309,16 @@ T6 Push-T, precision regime & $+2.3$ to $+4.5 \pm 6.2$; faster (80.5 vs 93 steps
 Two design laws emerged, both measured rather than assumed. (1)~\textbf{Both
 failure directions must cost something}: wherever overshoot or a redo is free
 (T1 dump, T2, pre-roof T3), one fixed blind action ties the physics-aware
-ceiling. (2)~\textbf{Free correction erases knowledge}: T6's blind pusher
-identifies the physics \emph{by watching the object respond}, so explicit
-knowledge only pays where tolerances are tight enough that a wrong-model push
-near the goal costs a full correction cycle. T6 (\texttt{DynPushT6-v1}) is
-modeled on the established Push-T benchmark with hidden mass/friction/COM on the
-tee --- the first task where the COM axis is decisive, and the only one whose
-controller family worked on the first probe (50\% nominal).
+ceiling. (2)~\textbf{Free correction erases knowledge}: T6 (built on the
+established Push-T benchmark, hidden mass/friction/COM on the tee) tested this
+four ways --- loose tolerance, widened COM, precision tolerance, and a
+high-power precision rerun --- and the premium is zero every time, even on
+time-to-success. A pusher that watches the object respond \emph{is} doing
+system identification; explicit knowledge has nothing left to add. Combined
+with T3's $+16.7$ under forced commitment, the boundary is sharp:
+\textbf{the knowledge premium lives exactly where correction is impossible}.
+Per the standing gate-before-investment rule, T6 gets no teacher or arms; the
+boundary finding itself goes in the paper.
 
 \section{First pre-registered result: the control task behaves \hfill complete}
 All 60 T4 arms trained (A, B$\times$3 targets, B-shuffled, C $\times$ 10 seeds;
@@ -380,8 +383,8 @@ drains.
 \begin{enumerate}[leftmargin=1.6em,itemsep=0.1em]
 \item \open{} First A-vs-B evidence (10 A seeds vs 5 B seeds, $10^3$ scale):
 $\sim$5--6\,h from launch. Full T3 slope answer (the headline test): $\sim$20\,h.
-\item \open{} T6 high-power precision gate ($\pm$3.1 CI); if the premium holds,
-T6 gets the same automated pipeline (teacher $\to$ datasets $\to$ arms).
+\item T6 high-power gate: \fail{} --- zero premium confirmed; T6 closed at the
+gate stage, its boundary finding documented (Section~8).
 \item Then: $\lambda$ sweep (100 runs); substitution arms only if the effect
 exists; probes + emergence curves from the log-spaced checkpoints; vision arms
 ($\sim$1\,TB data step) later.

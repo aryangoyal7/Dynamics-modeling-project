@@ -63,14 +63,20 @@ COM with per-bucket speeds.
 zero — per-step feedback lets the blind pusher identify the COM by
 watching, and ±0.25 rad of yaw tolerance forgives its mistakes. v2 (COM
 range widened to ±2.4 cm, time-to-success measured): still zero on every
-axis, even speed. This is itself a finding: with corrections available and
-loose goals, feedback fully substitutes for knowledge — the reason the
-plan's original tasks were commitment-based. v3 (precision regime: 1.5 cm
-/ 0.12 rad tolerance, so a wrong-COM push near the goal overshoots the
-tolerance and costs a full correction cycle): **first directionally
-positive result — all four metrics favor aware** (success +2.9,
-success@100 +4.5, success@75 +2.3, median steps 80.5 vs 93) but not yet
-significant at ±6.2. A 4×-power rerun (CI ±3.1) is running to settle it.
+axis, even speed. v3 (precision regime: 1.5 cm / 0.12 rad tolerance):
+directionally positive on all four metrics at low power — but the
+**4×-power rerun (2,048 episodes/side, CI ±3.1) settled it: premium −0.2
+to +0.6 points, median steps 94 vs 90.5. ZERO.** The v3 signal was noise.
+
+**T6 VERDICT: does not survive the gate.** Four independent measurements
+agree: when a controller can watch the object respond and correct,
+explicit physics knowledge adds nothing — feedback IS system
+identification. Combined with T3's +16.7 under forced commitment, this is
+a crisp, measured design law: **the knowledge premium lives exactly where
+correction is impossible.** The in-action task style the study hoped to
+add fails its own validity bar at the controller level; per the standing
+"gate before investment" rule, no teacher/dataset/arms for T6. The
+environment stays in the repo; the boundary finding goes in the paper.
 
 ## 🚧 T5 "cliff toss" — DESCOPED (user decision; kept for reference)
 
