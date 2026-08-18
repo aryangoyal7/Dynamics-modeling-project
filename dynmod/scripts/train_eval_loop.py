@@ -36,11 +36,14 @@ def matrix_running(prefix):
     return r.returncode == 0
 
 
-def pending(prefix):
+def pending(prefix, shard=0, shards=1):
+    import zlib
     out = []
     for ck in sorted(glob.glob(f"{RUNS}/{prefix}-*/final_ckpt.pt")):
         name = os.path.basename(os.path.dirname(ck))
         if "gate" in name:
+            continue
+        if zlib.crc32(name.encode()) % shards != shard:
             continue
         if not os.path.exists(f"{REPORTS}/policy_eval_{name}.json"):
             out.append((name, ck))
@@ -53,14 +56,19 @@ def main():
     p.add_argument("--env-id", default="SlideToSlotT3-v1")
     p.add_argument("--episodes", type=int, default=20)
     p.add_argument("--control-mode", default="pd_ee_delta_pos")
+    p.add_argument("--shard", type=int, default=0)
+    p.add_argument("--shards", type=int, default=1)
     args = p.parse_args()
 
     quiet_sweeps = 0
     n_done = 0
     while True:
-        todo = pending(args.prefix)
+        todo = pending(args.prefix, args.shard, args.shards)
         if not todo:
-            if not matrix_running(args.prefix):
+            # shard 0 owns the final slopes step: it must also wait out the
+            # OTHER shards' remaining evaluations
+            others = pending(args.prefix, 0, 1) if args.shard == 0 else []
+            if not matrix_running(args.prefix) and not others:
                 quiet_sweeps += 1
                 if quiet_sweeps >= 2:
                     break
@@ -82,6 +90,9 @@ def main():
                 subprocess.run(["cp", "-ru", os.path.dirname(ck),
                                 os.path.join(BACKUP, "policy_runs")],
                                capture_output=True)
+    if args.shard != 0:
+        print(f"[loop] shard {args.shard} done ({n_done} evals)", flush=True)
+        return
     print(f"[loop] all arms evaluated ({n_done} this session) - slopes", flush=True)
 
     scales = sorted({os.path.basename(f).split("-")[1]

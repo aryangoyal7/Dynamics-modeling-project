@@ -1,5 +1,29 @@
 # Project Progress
 
+## ⏸️ PAUSED BY USER (2026-08-18 ~23:55) — safe-shutdown state + resume plan
+
+Everything stopped cleanly and backed up. **State**: all 120 arms at the
+10³/10⁴ scales are TRAINED (7.8 GB of checkpoints in
+`scratch_backup/policy_runs/`, verified 120/120); 22 arms evaluated
+(reports in `reports/`, persistent); first preregistered result recorded
+(A vs B-multistep at 10³: CIs overlap → no effect at that scale, B
+directionally shallower); 10⁵ generation was at 110/400 cycles — the
+partial output is unusable (no metadata sidecar until completion) and
+must restart from scratch (~4.5 h). To resume after the machine returns:
+
+1. `bash ~/cloudfiles/code/Users/garyan18/dynamics_modeling/rebuild_env.sh`
+2. `cp -r .../scratch_backup/policy_runs /mnt/scratch/dynamics/ && cp -r
+   .../scratch_backup/data /mnt/scratch/dynamics/`
+3. Relaunch 4 eval shards (`train_eval_loop --shard k --shards 4`, GPUs
+   3/4/6/7) — they skip the 22 done, finish the ~98 remaining, and shard 0
+   auto-runs the slope summary.
+4. Restart 10⁵ generation (`scripted_teacher_t3 --episodes 100000 --seed
+   20000 --calib reports/t3_flick_calibration_v4.json --out
+   /mnt/scratch/dynamics/data/t3_1e5`, then backup), then
+   `launch_main_arms --scales 1e3 1e4 1e5 --steps 150000` (skips the 120
+   done → trains only the 60 new 10⁵ arms).
+5. Re-arm `auto_shutdown.sh`.
+
 ## ✅ T3 TEACHER CERTIFIED — pipeline running (2026-08-18, evening)
 
 After two calibration rounds, the scripted physics-aware teacher **passed
