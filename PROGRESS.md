@@ -1,5 +1,63 @@
 # Project Progress
 
+## ▶️ RESUMED 2026-08-19 + T8 stack-and-carry built and gated
+
+Machine returned; environment rebuilt in 6 min from `rebuild_env.sh`, 7.8 GB
+of checkpoints and both certified datasets restored from `scratch_backup`,
+and everything relaunched in parallel: 4 evaluation shards (GPUs 3/4/6/7)
+draining the remaining T3 grid evaluations, the 10^5 dataset regenerating
+(GPU 1), chained to train the 60 new 10^5 arms, and the T8 gate on GPU 2.
+Figures added (`dynmod/analysis/make_figs.py` → `figs/t3_1e3_result.png`,
+`figs/gate_premiums.png`, `figs/t4_control.png`); report rebuilt to 9 pages.
+
+### T8 "stack-and-carry" (user design 2026-08-19): built, PASSES the gate
+
+Task: place a tall block (6×6×10 cm, hidden COM offset up to ±1.2 cm) on a
+narrow beam (12×3.6×2.4 cm), grasp the beam at its free end, carry the stack
+34 cm to a goal zone inside 140 steps, set it down. `StackCarryT8-v1` in
+`dynmod/envs/tasks.py` (+ teacher twin), gate in
+`dynmod/scripts/premium_gate_t8.py`.
+
+**Verdict at 64 episodes/arm: aware 0.86 vs blind 0.69, premium +17.2** —
+healthy success far above the 0.55 bar and a premium edging T3's +16.7. Full
+512-episode gate running. Three iterations, each producing a measured law:
+
+**Iteration 1 — speed as the knowledge lever: structurally zero.** First
+design made the carry SPEED the choice (slip off a wide slab if too fast,
+miss the deadline if too slow). The 45-cell probe showed a real physics
+cliff (at friction 0.33 the block sheared off at every speed above 0.5,
+at 0.68 even 0.9 survived), yet the premium is provably zero, and the reason
+generalizes: **the slip threshold s_safe(c) depends on c but the deadline
+floor s_min does not, and slower is always safer — so the blind controller
+parks at s_min, the same corner an omniscient controller would pick, and
+succeeds on exactly the same episodes.** A monotone choice against a
+c-independent floor can never pay, no matter how strong the physics is.
+This is why T3's flick pays: there BOTH thresholds move with c.
+
+**Iteration 2 — the derived aware controller LOSES to blind.** Rebuilt in
+the balance regime (block stands on the beam's 3.6 cm width; tipping, not
+sliding, is the failure). The "obvious" aware controller — shift the block
+by −COM so the COM sits on the beam center line — measured **0.28 vs blind
+0.47**. A swept placement (block teleported to a chosen offset, carry only)
+found why: success peaks when the COM sits **+1.0 to +1.5 cm toward the
+goal**, not at zero, because the carry's opening acceleration throws the
+block backwards; both COM settings collapse onto one curve of COM-position,
+displaced by exactly the COM offset. So **the informed arm must be
+calibrated, not derived** — the same lesson as T3's flick table, and a real
+trap: an analytically "correct" aware controller makes a good task read as
+a failed gate.
+
+**Iteration 3 — both arms calibrated over the same grid:** aware gets a
+per-bucket (speed, bias) and the COM correction; blind gets one calibrated
+(speed, bias) pair on the mix — the best a c-blind controller can do, since
+the COM angle is uniform so no fixed offset can track it. Premium +17.2.
+
+Also fixed along the way: compensating the COM in **x** as well as y measured
+worse than blind (0.38 vs 0.62) — it buys nothing on a 12 cm-long beam and
+walks the block into the gripper's descent path. And a teleport-based probe
+silently did nothing until `scene._gpu_apply_all()` was added: pose writes
+outside `_initialize_episode` never reach the GPU buffer.
+
 ## ⏸️ PAUSED BY USER (2026-08-18 ~23:55) — safe-shutdown state + resume plan
 
 Everything stopped cleanly and backed up. **State**: all 120 arms at the

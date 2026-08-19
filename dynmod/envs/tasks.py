@@ -1213,43 +1213,55 @@ class RouteChoiceT7Env(SlideToSlotT3Env):
 # =========================================================================== #
 @register_env("StackCarryT8-v1", max_episode_steps=140)
 class StackCarryT8Env(DynBaseEnv):
-    """Stack-and-carry (added 2026-08-19 on user direction). Place a cube on
-    a slab, then grasp the slab and carry the whole stack to a goal zone,
-    under a hard step budget.
+    """Stack-and-carry (user design 2026-08-19), in the BALANCE regime.
 
-    Where the physics knowledge lives (per the two measured design laws):
-      - The CARRY SPEED is a committed choice priced in both directions: the
-        cube rides on the slab held only by surface friction, so accelerating
-        beyond the friction cone topples or slides it off (irreversible - no
-        time to re-stack), while crawling misses the 140-step deadline.
-        The safe maximum depends on the hidden friction and mass.
-      - The PLACEMENT OFFSET is committed at release: the cube's hidden COM
-        (up to 40% of its half-width, invisible) decides whether the stack
-        survives the carry accelerations; only knowledge of c can center the
-        COM over the slab rather than the geometric shape.
+    Two objects of different shape: a flat beam (12 x 3.6 x 2.4 cm) and a
+    tall block (6 x 6 x 10 cm) whose center of mass is hidden and offset by
+    up to 40% of its half-width (+-1.2 cm). Place the block on the narrow
+    beam, grasp the beam at its free end, and carry the stack sideways to a
+    goal zone inside a step budget.
+
+    Why THIS geometry (measured, gate iteration 1). The first version made
+    the carry SPEED the knowledge-bearing choice: the block rides on a wide
+    slab and slips off when the carry exceeds the friction cone. The probe
+    showed the premium is structurally zero there, for a reason worth
+    recording: the slip threshold s_safe(c) is c-dependent but the deadline
+    threshold s_min is NOT, and slower is always safer, so the blind
+    controller simply parks at s_min - the same corner an omniscient
+    controller would choose - and succeeds on exactly the same episodes.
+    A monotone choice with a c-independent floor can never pay.
+
+    The balance regime has no safe corner. The block's support is the beam's
+    3.6 cm width, so it stands only while its hidden COM stays within +-1.8 cm
+    of the beam center line; the carry runs along y, and the acceleration and
+    braking phases tilt the effective gravity so an off-center COM topples the
+    block. The correct placement therefore differs in DIRECTION with c (the
+    COM angle is uniform), which is the structure that paid in T3: no single
+    fixed placement is right, over- and under-shooting both fail, and the
+    choice is committed the moment the gripper opens.
     """
 
-    BASE_HALF = [0.06, 0.032, 0.014]  # slab: long x, graspable across y
-    TOP_HALF = 0.03  # cube
-    TOP_SEAT_DX = 0.025  # cube seat on +x half; slab grasped at the -x end
-    GRASP_DX = -0.04
+    BASE_HALF = [0.06, 0.018, 0.012]  # beam: long x, NARROW y = the support
+    TOP_HALF = [0.03, 0.03, 0.05]  # tall block: tips before it slides
+    TOP_SEAT_DX = 0.02  # block seat, +x of the beam center
+    GRASP_DX = -0.04  # beam grasped at its free -x end
     BASE_SPAWN = (-0.10, -0.16)
     TOP_SPAWN = (0.06, -0.16)
-    GOAL_XY = (-0.10, 0.18)
+    GOAL_XY = (-0.10, 0.18)  # carry runs along +y: braking stresses the stack
     goal_tol = 0.04
     static_vel = 0.05
     release_dist = 0.06
     C_SPEC_KW = dict(com_frac_max=0.4)  # T6 lesson: 0.15 is sub-measurable
 
     def _build_task(self, options: dict):
-        # slab: per-env friction/density but NO hidden COM (the cube carries it)
+        # beam: per-env friction/density but NO hidden COM (the block owns it)
         base_c = dict(self._c)
         base_c["com_x_frac"] = np.zeros(self.num_envs)
         base_c["com_y_frac"] = np.zeros(self.num_envs)
         self.obj = build_randomized_box(
-            self, self.BASE_HALF, base_c, name="slab")
+            self, self.BASE_HALF, base_c, name="beam")
         self.top = build_randomized_box(
-            self, self.TOP_HALF, self._c, name="cube", base_density=600.0)
+            self, self.TOP_HALF, self._c, name="block", base_density=1000.0)
         builder = self.scene.create_actor_builder()
         green = sapien.render.RenderMaterial(base_color=[0.1, 0.7, 0.1, 1])
         builder.add_box_visual(half_size=[0.05, 0.05, 6e-4], material=green)
@@ -1266,7 +1278,7 @@ class StackCarryT8Env(DynBaseEnv):
         )
         for actor, spawn, z, j in (
             (self.obj, self.BASE_SPAWN, self.BASE_HALF[2], jitter[:, :2]),
-            (self.top, self.TOP_SPAWN, self.TOP_HALF, jitter[:, 2:]),
+            (self.top, self.TOP_SPAWN, self.TOP_HALF[2], jitter[:, 2:]),
         ):
             xyz = torch.zeros((b, 3), device=self.device)
             xyz[:, 0] = spawn[0] + j[:, 0]
@@ -1284,13 +1296,15 @@ class StackCarryT8Env(DynBaseEnv):
         goal = torch.tensor(self.GOAL_XY, device=self.device)
         goal_dist = torch.linalg.norm(base_p[:, :2] - goal[None], dim=1)
         at_goal = goal_dist < self.goal_tol
-        # the cube must still ride the slab, upright
+        # the block must still stand on the beam: high enough to be ON it
+        # (0.062 when seated, 0.042 if it has toppled onto it, 0.038 if it
+        # fell beside it), still over the beam in xy, and upright
         riding = (
-            (torch.linalg.norm(top_p[:, :2] - base_p[:, :2], dim=1) < 0.055)
-            & ((top_p[:, 2] - base_p[:, 2]) > 0.03)
+            (torch.linalg.norm(top_p[:, :2] - base_p[:, :2], dim=1) < 0.045)
+            & ((top_p[:, 2] - base_p[:, 2]) > 0.05)
         )
-        upright = _quat_zz(self.top.pose.q) > 0.85
-        placed = base_p[:, 2] < 0.03
+        upright = _quat_zz(self.top.pose.q) > 0.9
+        placed = base_p[:, 2] < 0.02
         speed = torch.linalg.norm(self.obj.linear_velocity, dim=1)
         static = speed < self.static_vel
         tcp_dist = self._tcp_to_obj_dist()

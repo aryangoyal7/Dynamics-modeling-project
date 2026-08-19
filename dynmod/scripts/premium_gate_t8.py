@@ -1,14 +1,30 @@
 """Knowledge-premium gate for T8 'stack-and-carry' (user design 2026-08-19).
 
-Controller family: grasp the cube, place it on the slab at a chosen offset,
-re-grasp the slab, carry the stack to the goal at a chosen speed, set it
-down. Two knowledge-bearing choices:
-  placement offset  c-aware: center the cube's hidden COM over the slab seat
-                    c-blind: center the cube's geometry (offset 0)
-  carry speed       c-aware: per-(mass, friction) bucket, calibrated
-                    c-blind: one fixed speed, calibrated on the full mix
+Controller family: grasp the tall block, place it on the narrow beam at a
+chosen lateral offset, re-grasp the beam at its free end, carry the stack
+along +y to the goal at a chosen speed, set it down, retreat.
 
-    python -m dynmod.scripts.premium_gate_t8 --probe   # per-bucket speed map
+  placement offset  THE knowledge-bearing choice. The block's support is the
+                    beam's 3.6 cm width, so it stands only while its hidden
+                    COM stays inside a narrow band around the beam center
+                    line - a band the carry's own acceleration shifts.
+                    c-aware: seat the block so its COM lands on a calibrated
+                             bias, i.e. offset by (bias - COM)
+                    c-blind: one calibrated fixed offset. That IS the best a
+                             c-blind controller can do: the COM angle is
+                             uniform, so no fixed offset tracks it.
+  carry speed       c-aware: per-(mass, friction) bucket; c-blind: one fixed
+                    speed calibrated on the full mix. Gate iteration 1 proved
+                    this lever alone pays nothing (see the env docstring); it
+                    is kept because with an off-center COM the safe speed does
+                    depend on c, and the blind arm must still be given its own
+                    best speed for the comparison to be honest.
+
+Both arms are calibrated over the SAME grid; only the information each may
+use differs. Iteration 2 measured what happens if the aware arm is derived
+rather than calibrated - it loses to blind, 0.28 vs 0.47.
+
+    python -m dynmod.scripts.premium_gate_t8 --probe   # placement x speed map
     python -m dynmod.scripts.premium_gate_t8           # full gate
 Writes reports/premium_gate_t8.json.
 """
@@ -27,20 +43,32 @@ import dynmod.envs  # noqa: F401
 
 MASS_B = [0.75, 1.0, 1.35]
 FRICTION_B = [0.33, 0.5, 0.68]
-SPEEDS = [0.2, 0.35, 0.5, 0.7, 0.9]
+SPEEDS = [0.4, 0.55]
+# lateral seat bias, metres: where the block's COM should sit relative to the
+# beam center line. Measured optimum is around +1.0 to +1.5 cm (the carry's
+# opening acceleration throws the block the other way), never 0.
+BIASES = [0.0025, 0.005, 0.0075, 0.010, 0.015]
 HORIZON = 140
-HOVER_Z = 0.14
-CUBE_GRASP_Z = 0.035
-CUBE_PLACE_Z = 0.066
-SLAB_GRASP_Z = 0.021
-CARRY_Z = 0.06
-PLACE_DOWN_Z = 0.023
 TRANSIT_V = 0.7
+# heights (TCP), from the geometry: beam top 0.024, block half-height 0.05
+HOVER_Z = 0.17          # above the standing block (top at 0.10)
+CLEAR_Z = 0.20          # above the block once seated on the beam (top 0.124)
+TOP_GRASP_Z = 0.075     # grasp the standing block 2.5 cm above its center
+TOP_PLACE_Z = 0.099     # so the block center lands at 0.074 = seated
+BEAM_GRASP_Z = 0.018
+CARRY_Z = 0.055
+PLACE_DOWN_Z = 0.020
 
 
 class StackCarryController:
-    """Per-env stage machine. speeds: (n,) carry speed. place_comp: (n,2)
-    xy compensation added to the cube seat (c-aware: -COM offset)."""
+    """Per-env stage machine.
+      speeds     (n,)   TCP speed limit while the stack is loaded
+      place_comp (n,2)  xy shift added to the block seat (c-aware: -COM)
+    """
+
+    LOADED = (11, 13)   # lift / carry / set-down: the chosen speed applies
+    HOLD_TOP = (2, 5)   # gripper closed on the block
+    HOLD_BEAM = (10, 13)
 
     def __init__(self, base, act_dim, speeds, place_comp):
         self.base, self.act_dim = base, act_dim
@@ -56,68 +84,68 @@ class StackCarryController:
         self.dwell = torch.where(hit, torch.zeros_like(self.dwell), self.dwell)
 
     def act(self):
-        base, n = self.base, self.n
+        base, n, dev = self.base, self.n, self.dev
         tcp = base.agent.tcp.pose.p
-        slab = base.obj.pose.p
-        cube = base.top.pose.p
-        goal = torch.tensor(base.GOAL_XY, device=self.dev)
+        beam = base.obj.pose.p
+        block = base.top.pose.p
+        goal = torch.tensor(base.GOAL_XY, device=dev)
         s = self.stage
         self.dwell += 1
+        col = lambda xy, z: torch.cat(
+            [xy, torch.full((n, 1), z, device=dev)], dim=1)
 
-        # per-stage TCP targets ------------------------------------------------
-        t = torch.zeros((n, 3), device=self.dev)
-        above_cube = cube.clone(); above_cube[:, 2] = HOVER_Z
-        at_cube = cube.clone(); at_cube[:, 2] = CUBE_GRASP_Z
-        seat = slab[:, :2] + torch.tensor(
-            [base.TOP_SEAT_DX, 0.0], device=self.dev) + self.place_comp
-        above_seat = torch.cat([seat, torch.full((n, 1), HOVER_Z, device=self.dev)], 1)
-        at_seat = torch.cat([seat, torch.full((n, 1), CUBE_PLACE_Z, device=self.dev)], 1)
-        grip_xy = slab[:, :2] + torch.tensor(
-            [base.GRASP_DX, 0.0], device=self.dev)
-        above_grip = torch.cat([grip_xy, torch.full((n, 1), 0.12, device=self.dev)], 1)
-        at_grip = torch.cat([grip_xy, torch.full((n, 1), SLAB_GRASP_Z, device=self.dev)], 1)
-        carry_t = torch.zeros((n, 3), device=self.dev)
-        carry_t[:, 0] = goal[0] + base.GRASP_DX
-        carry_t[:, 1] = goal[1]
-        carry_t[:, 2] = CARRY_Z
-        down_t = carry_t.clone(); down_t[:, 2] = PLACE_DOWN_Z
-        retreat = tcp.clone(); retreat[:, 2] = 0.16
+        seat = beam[:, :2] + torch.tensor(
+            [base.TOP_SEAT_DX, 0.0], device=dev) + self.place_comp
+        grip_xy = beam[:, :2] + torch.tensor([base.GRASP_DX, 0.0], device=dev)
+        carry_xy = goal[None] + torch.tensor([base.GRASP_DX, 0.0], device=dev)
 
-        targets = [above_cube, at_cube, at_cube, above_cube,  # 0-3
-                   above_seat, at_seat, at_seat, above_grip,  # 4-7
-                   at_grip, at_grip, carry_t, carry_t,        # 8-11 (10=lift)
-                   down_t, down_t, retreat]                   # 12-14
+        above_block = col(block[:, :2], HOVER_Z)
+        at_block = col(block[:, :2], TOP_GRASP_Z)
+        above_seat = col(seat, CLEAR_Z)
+        at_seat = col(seat, TOP_PLACE_Z)
+        above_grip = col(grip_xy, CLEAR_Z)
+        at_grip = col(grip_xy, BEAM_GRASP_Z)
+        lift = col(grip_xy, CARRY_Z)
+        carry = col(carry_xy.expand(n, 2), CARRY_Z)
+        down = col(carry_xy.expand(n, 2), PLACE_DOWN_Z)
+        retreat = col(tcp[:, :2], HOVER_Z)
+
+        targets = [above_block, at_block, at_block, above_block,   # 0-3
+                   above_seat, at_seat, at_seat, above_seat,       # 4-7
+                   above_grip, at_grip, at_grip, lift,             # 8-11
+                   carry, down, down, retreat]                     # 12-15
+        t = torch.zeros((n, 3), device=dev)
         for k, tgt in enumerate(targets):
             t = torch.where((s == k)[:, None], tgt, t)
 
-        # speed limit: carry stage uses the per-env choice, transit the default
-        lim = torch.full((n,), TRANSIT_V, device=self.dev)
-        lim = torch.where(s == 11, self.speeds, lim)
-        a = torch.zeros((n, self.act_dim), device=self.dev)
+        lo, hi = self.LOADED
+        lim = torch.where((s >= lo) & (s <= hi), self.speeds,
+                          torch.full((n,), TRANSIT_V, device=dev))
+        a = torch.zeros((n, self.act_dim), device=dev)
         a[:, :3] = torch.clamp((t - tcp) / 0.1, -lim[:, None], lim[:, None])
 
-        # gripper: open on approach/release stages, closed while holding
-        holding = ((s >= 2) & (s <= 5)) | ((s >= 9) & (s <= 12))
-        a[:, 3:] = torch.where(holding[:, None], -torch.ones((n, 1), device=self.dev),
-                               torch.ones((n, 1), device=self.dev))
+        holding = ((s >= self.HOLD_TOP[0]) & (s <= self.HOLD_TOP[1])) | \
+                  ((s >= self.HOLD_BEAM[0]) & (s <= self.HOLD_BEAM[1]))
+        a[:, 3:] = torch.where(holding[:, None],
+                               -torch.ones((n, 1), device=dev),
+                               torch.ones((n, 1), device=dev))
 
-        # transitions ----------------------------------------------------------
         d_xy = lambda tgt: torch.linalg.norm(tcp[:, :2] - tgt[:, :2], dim=1)
-        self._adv((d_xy(above_cube) < 0.012) & (tcp[:, 2] > HOVER_Z - 0.02), 0)
-        self._adv((d_xy(at_cube) < 0.012) & (tcp[:, 2] < CUBE_GRASP_Z + 0.012), 1)
-        self._adv(self.dwell >= 8, 2)   # close on cube
-        self._adv(tcp[:, 2] > HOVER_Z - 0.02, 3)
-        self._adv(d_xy(above_seat) < 0.012, 4)
-        self._adv(tcp[:, 2] < CUBE_PLACE_Z + 0.012, 5)
-        self._adv(self.dwell >= 6, 6)   # open, cube seated
-        self._adv((d_xy(above_grip) < 0.012) & (tcp[:, 2] > 0.10), 7)
-        self._adv(tcp[:, 2] < SLAB_GRASP_Z + 0.012, 8)
-        self._adv(self.dwell >= 8, 9)   # close on slab
-        self._adv(tcp[:, 2] > CARRY_Z - 0.01, 10)
-        arrived = torch.linalg.norm(slab[:, :2] - goal[None], dim=1) < 0.02
-        self._adv(arrived, 11)
-        self._adv(tcp[:, 2] < PLACE_DOWN_Z + 0.008, 12)
-        self._adv(self.dwell >= 6, 13)  # open, stack delivered
+        self._adv((d_xy(above_block) < 0.012) & (tcp[:, 2] > HOVER_Z - 0.02), 0)
+        self._adv((d_xy(at_block) < 0.012) & (tcp[:, 2] < TOP_GRASP_Z + 0.012), 1)
+        self._adv(self.dwell >= 8, 2)                       # close on block
+        self._adv(tcp[:, 2] > HOVER_Z - 0.015, 3)
+        self._adv((d_xy(above_seat) < 0.010) & (tcp[:, 2] > CLEAR_Z - 0.03), 4)
+        self._adv(tcp[:, 2] < TOP_PLACE_Z + 0.010, 5)
+        self._adv(self.dwell >= 8, 6)                       # open: COMMITTED
+        self._adv(tcp[:, 2] > CLEAR_Z - 0.02, 7)            # clear the block
+        self._adv(d_xy(above_grip) < 0.012, 8)
+        self._adv(tcp[:, 2] < BEAM_GRASP_Z + 0.010, 9)
+        self._adv(self.dwell >= 8, 10)                      # close on beam
+        self._adv(tcp[:, 2] > CARRY_Z - 0.008, 11)
+        self._adv(torch.linalg.norm(beam[:, :2] - goal[None], dim=1) < 0.02, 12)
+        self._adv(tcp[:, 2] < PLACE_DOWN_Z + 0.008, 13)
+        self._adv(self.dwell >= 6, 14)                      # open, delivered
         return a
 
 
@@ -127,107 +155,153 @@ def make_env(n, **kw):
                     **kw)
 
 
-def episode(env, speed_of, aware, seed):
-    """speed_of(base, c) -> (n,) carry speeds; called AFTER the reset so c is
-    the c actually simulated (reset reconfigures when reconfiguration_freq=1)."""
+def com_y(base, c):
+    """Hidden COM offset along the beam's narrow axis, in metres."""
+    return torch.as_tensor(c["com_y_frac"] * base.TOP_HALF[1],
+                           dtype=torch.float32, device=base.device)
+
+
+def place_blind(bias):
+    """Fixed lateral seat offset - all a c-blind controller can do."""
+    def f(base, c):
+        comp = torch.zeros((base.num_envs, 2), device=base.device)
+        comp[:, 1] = bias
+        return comp
+    return f
+
+
+def place_aware(bias_of):
+    """Seat the block so its hidden COM lands on the calibrated bias.
+
+    The bias is NOT zero and must be calibrated, not derived: a swept
+    placement (reports note, gate iteration 2) showed success peaks when the
+    COM sits ~+1.0 to +1.5 cm toward the goal, because the carry's opening
+    acceleration throws the block the other way. Compensating the COM to the
+    beam center line - the 'obvious' aware controller - lands on the falling
+    flank and measures WORSE than blind (0.28 vs 0.47). Same lesson as T3:
+    the informed arm has to be calibrated too, or the gate reads backwards.
+    """
+    def f(base, c):
+        comp = torch.zeros((base.num_envs, 2), device=base.device)
+        comp[:, 1] = bias_of(base, c) - com_y(base, c)
+        return comp
+    return f
+
+
+def episode(env, speed_of, place_of, seed, horizon=HORIZON):
+    """speed_of(base, c) -> (n,) speeds, place_of(base, c) -> (n,2) seat
+    offset; both read c AFTER the reset (with reconfiguration_freq=1 the
+    reset resamples the simulated physics).
+    Returns (success, stack_ok_at_end, stage, first_success_step)."""
     base = env.unwrapped
     env.reset(seed=seed)
     c = base.get_c()
     speeds = speed_of(base, c)
-    comp = torch.zeros((base.num_envs, 2), device=base.device)
-    if aware:
-        comp[:, 0] = -torch.as_tensor(
-            c["com_x_frac"] * base.TOP_HALF, dtype=torch.float32, device=base.device)
-        comp[:, 1] = -torch.as_tensor(
-            c["com_y_frac"] * base.TOP_HALF, dtype=torch.float32, device=base.device)
-    ctrl = StackCarryController(
-        base, env.action_space.shape[-1], speeds, comp)
+    comp = place_of(base, c)
+    ctrl = StackCarryController(base, env.action_space.shape[-1], speeds, comp)
     seen = torch.zeros(base.num_envs, dtype=torch.bool, device=base.device)
-    for _ in range(HORIZON):
+    t_hit = torch.full((base.num_envs,), -1, dtype=torch.long, device=base.device)
+    for step in range(horizon):
         _, _, _, _, info = env.step(ctrl.act())
+        newly = info["success"] & ~seen
+        t_hit = torch.where(newly, torch.full_like(t_hit, step), t_hit)
         seen |= info["success"]
-    stk = info["stack_ok"]
-    return seen, stk, ctrl.stage
+    return seen, info["stack_ok"], ctrl.stage, t_hit
 
 
-def probe(aware=True):
-    """Success per (mass, friction) bucket x carry speed at pinned c."""
+def fixed(sp):
+    return lambda b, c: torch.full((b.num_envs,), sp, device=b.device)
+
+
+def probe():
+    """Placement-response curve per bucket: success against where the block's
+    COM ends up relative to the beam center line."""
     for m, f in itertools.product(MASS_B, FRICTION_B):
         env = make_env(32, randomize_c=False,
-                       c_override=dict(mass_mult=m, friction=f, com_frac=0.2))
-        base = env.unwrapped
+                       c_override=dict(mass_mult=m, friction=f, com_frac=0.35))
         row = []
-        for sp in SPEEDS:
-            fixed = lambda b, c, sp=sp: torch.full((b.num_envs,), sp, device=b.device)
-            seen, stk, stage = episode(env, fixed, aware, seed=8)
-            row.append(f"s={sp}: {seen.float().mean():.2f}"
-                       f"/stk{stk.float().mean():.2f}"
-                       f"/st{stage.float().mean():.0f}")
+        for b in BIASES:
+            seen, _, _, t = episode(env, fixed(0.4),
+                                    place_aware(lambda base, c, b=b: b), seed=8)
+            tt = t[t >= 0]
+            row.append(f"bias={b * 100:+.1f}cm {seen.float().mean():.2f}"
+                       + (f"@{int(tt.float().mean())}" if len(tt) else ""))
         env.close()
         print(f"m={m} f={f}:  " + "  ".join(row), flush=True)
 
 
 def main():
-    # aware speed table per bucket
+    # 1. aware: per-bucket (speed, bias), calibrated at pinned physics
     table = {}
     for m, f in itertools.product(MASS_B, FRICTION_B):
         env = make_env(64, randomize_c=False,
                        c_override=dict(mass_mult=m, friction=f))
-        base = env.unwrapped
-        best = (-1.0, SPEEDS[0])
-        for sp in SPEEDS:
-            fixed = lambda b, c, sp=sp: torch.full((b.num_envs,), sp, device=b.device)
-            seen, _, _ = episode(env, fixed, True, seed=8)
+        best = (-1.0, SPEEDS[0], BIASES[0])
+        for sp, b in itertools.product(SPEEDS, BIASES):
+            seen, _, _, _ = episode(env, fixed(sp),
+                                    place_aware(lambda base, c, b=b: b), seed=8)
             v = float(seen.float().mean())
             if v > best[0]:
-                best = (v, sp)
+                best = (v, sp, b)
         env.close()
-        table[(m, f)] = best[1]
-        print(f"aware m={m} f={f}: speed {best[1]} -> {best[0]:.2f}", flush=True)
+        table[(m, f)] = (best[1], best[2])
+        print(f"aware m={m} f={f}: speed {best[1]} bias {best[2]*100:+.1f}cm "
+              f"-> {best[0]:.2f}", flush=True)
 
-    # blind: best single fixed speed on the randomized mix
+    # 2. blind: one (speed, bias) pair, calibrated on the randomized mix -
+    #    the best any c-blind controller can do
     blind_cal = {}
-    for sp in SPEEDS:
+    for sp, b in itertools.product(SPEEDS, BIASES):
         env = make_env(128, reconfiguration_freq=1)
-        base = env.unwrapped
         succ = []
         for cyc in range(2):
-            fixed = lambda b, c, sp=sp: torch.full((b.num_envs,), sp, device=b.device)
-            seen, _, _ = episode(env, fixed, False, seed=8100 + cyc)
+            seen, _, _, _ = episode(env, fixed(sp), place_blind(b),
+                                    seed=8100 + cyc)
             succ.extend(seen.cpu().numpy().tolist())
         env.close()
-        blind_cal[sp] = float(np.mean(succ))
-        print(f"blind s={sp}: {blind_cal[sp]:.3f}", flush=True)
-    blind_speed = max(blind_cal, key=blind_cal.get)
+        blind_cal[f"{sp}/{b}"] = float(np.mean(succ))
+        print(f"blind s={sp} bias={b*100:+.1f}cm: {blind_cal[f'{sp}/{b}']:.3f}",
+              flush=True)
+    bs, bb = max(blind_cal, key=blind_cal.get).split("/")
+    blind_speed, blind_bias = float(bs), float(bb)
+
+    def bucket(base, c, idx):
+        ms, fs = np.array(MASS_B), np.array(FRICTION_B)
+        return np.array([
+            table[(MASS_B[np.abs(np.log(ms) - np.log(c["mass_mult"][i])).argmin()],
+                   FRICTION_B[np.abs(np.log(fs) - np.log(c["friction"][i])).argmin()])][idx]
+            for i in range(base.num_envs)])
 
     def aware_speeds(base, c):
-        ms, fs = np.array(MASS_B), np.array(FRICTION_B)
-        r = np.array([
-            table[(MASS_B[np.abs(np.log(ms) - np.log(c["mass_mult"][i])).argmin()],
-                   FRICTION_B[np.abs(np.log(fs) - np.log(c["friction"][i])).argmin()])]
-            for i in range(base.num_envs)])
-        return torch.tensor(r, dtype=torch.float32, device=base.device)
+        return torch.tensor(bucket(base, c, 0), dtype=torch.float32,
+                            device=base.device)
 
+    def aware_bias(base, c):
+        return torch.tensor(bucket(base, c, 1), dtype=torch.float32,
+                            device=base.device)
+
+    # 3. head to head on the same randomized mix
     final = {}
     for mode in ("blind", "aware"):
         env = make_env(128, reconfiguration_freq=1)
-        base = env.unwrapped
+        speed_of = aware_speeds if mode == "aware" else fixed(blind_speed)
+        place_of = (place_aware(aware_bias) if mode == "aware"
+                    else place_blind(blind_bias))
         succ = []
-        speed_of = (aware_speeds if mode == "aware" else
-                    lambda b, c: torch.full((b.num_envs,), blind_speed, device=b.device))
         for cyc in range(4):
-            seen, _, _ = episode(env, speed_of, mode == "aware", seed=8200 + cyc)
+            seen, _, _, _ = episode(env, speed_of, place_of, seed=8200 + cyc)
             succ.extend(seen.cpu().numpy().tolist())
         env.close()
         final[mode] = float(np.mean(succ))
         n_ep = len(succ)
     ci = 2 * (2 * 0.25 / n_ep) ** 0.5
-    print(f"blind(s={blind_speed}) {final['blind']:.3f}  "
-          f"aware {final['aware']:.3f}  "
+    print(f"blind(s={blind_speed}, bias={blind_bias*100:+.1f}cm) "
+          f"{final['blind']:.3f}  aware {final['aware']:.3f}  "
           f"premium {final['aware'] - final['blind']:+.3f} ± {ci:.3f}")
     json.dump(dict(
-        speed_table={str(k): v for k, v in table.items()},
-        blind_calib=blind_cal, blind_speed=blind_speed,
+        aware_table={str(k): v for k, v in table.items()},
+        blind_calib=blind_cal, blind_speed=blind_speed, blind_bias=blind_bias,
+        episodes=n_ep,
         result=dict(blind=final["blind"], aware=final["aware"],
                     premium=final["aware"] - final["blind"], ci95=ci)),
         open("reports/premium_gate_t8.json", "w"), indent=1)
