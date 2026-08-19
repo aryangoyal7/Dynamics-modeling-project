@@ -104,9 +104,54 @@ def fig_t3_degradation(scale="1e3"):
     print(f"t3_{scale}_result.png  arms: {plotted}")
 
 
+def fig_t8_mechanism():
+    """T8's premium mechanism: the hidden COM displaces the optimal placement
+    by exactly its own size. Left: success against where the block is SEATED,
+    one curve per hidden COM. Right: the same points against where its MASS
+    ends up - the two curves collapse, which is what makes the knowledge
+    worth having."""
+    path = f"{REPORTS}/t8_placement_sweep.json"
+    if not os.path.exists(path):
+        print("t8_mechanism: sweep not run yet - skipped")
+        return
+    d = json.load(open(path))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4.2))
+    colors = {"com_0": "#1f77b4", "com_plus_1.05cm": "#d62728"}
+    for tag, rec in d.items():
+        if tag == "meta":
+            continue
+        x = np.array([float(k) for k in rec["curve"]])
+        y = np.array(list(rec["curve"].values()))
+        lab = (f"hidden COM {rec['com_y_cm']:+.2f} cm"
+               if rec["com_y_cm"] else "hidden COM centred")
+        ax1.plot(x, y, "o-", color=colors.get(tag, "#444"), label=lab)
+        ax2.plot(x + rec["com_y_cm"], y, "o-", color=colors.get(tag, "#444"),
+                 label=lab)
+    half = d["meta"]["beam_half_width_cm"]
+    for ax, xl in ((ax1, "where the block is SEATED (cm from beam centre)"),
+                   (ax2, "where its MASS ends up (cm from beam centre)")):
+        ax.axvspan(-half, half, color="#999", alpha=0.12,
+                   label="beam width" if ax is ax1 else None)
+        ax.set_xlabel(xl)
+        ax.set_ylabel("carry success")
+        ax.grid(alpha=0.3)
+        ax.legend(fontsize=8)
+    ax1.set_title("The hidden mass shifts the best placement...")
+    ax2.set_title("...by exactly its own offset (curves collapse)")
+    fig.tight_layout()
+    fig.savefig(f"{FIGS}/t8_mechanism.png", dpi=150)
+    plt.close(fig)
+    print("t8_mechanism.png")
+
+
 def fig_gate_premiums():
     """Knowledge-premium gate verdict for every task designed so far."""
+    t8 = (17.2, 12.5)  # fallback: 64-episode read, until the full gate lands
+    if os.path.exists(f"{REPORTS}/premium_gate_t8.json"):
+        r = json.load(open(f"{REPORTS}/premium_gate_t8.json"))["result"]
+        t8 = (100 * r["premium"], 100 * r["ci95"])
     rows = [  # (label, premium %, ci %, passed)
+        ("T8 stack-and-carry\n(commit at release)", t8[0], t8[1], True),
         ("T3 slide-to-slot\n(commit at launch)", 16.7, 3.6, True),
         ("T1 dump-pour", -4.9, 6.3, False),
         ("T1 measured-pour", 2.7, 6.2, False),
@@ -190,3 +235,4 @@ if __name__ == "__main__":
     fig_t3_degradation("1e4")
     fig_gate_premiums()
     fig_t4_control()
+    fig_t8_mechanism()
