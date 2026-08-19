@@ -306,7 +306,7 @@ T5 cliff toss & (built, then dropped by decision) & one-shot force $\ne$ dynamic
 T6 Push-T, loose tolerance & $-2.0$ to $-3.7 \pm 6.2$ & feedback substitutes for knowledge \\
 T6 Push-T, precision, high power & $-0.2$ to $+0.6 \pm 3.1$; 94 vs 90.5 steps & \fail{} --- confirmed zero (2{,}048 eps/side) \\
 T8 stack-and-carry, speed lever & structurally $0$ (see Section~12) & \fail{} --- monotone choice, $c$-independent floor \\
-T8 stack-and-carry, balance & $+17.2$ (86 vs 69\%) & \pass{} --- second live task \\
+T8 stack-and-carry, balance & $+12.7 \pm 6.2$ (82.4 vs 69.7\%) & \pass{} --- second live task \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -443,10 +443,15 @@ budget. The block stands only while its hidden mass stays inside a band
 around the beam's centre line, and the placement is committed the instant the
 gripper opens.
 
-\textbf{Gate: aware $0.86$ vs blind $0.69$, premium $+17.2$ points} at 64
-episodes per arm --- healthy success far above the $0.55$ bar and a premium
-edging T3's. The full 512-episode gate is running. Three iterations, each
-leaving a measured law behind:
+\textbf{Gate: aware $0.824$ vs blind $0.697$, premium $+12.7 \pm 6.2$
+points} at 512 episodes per arm --- healthy success far above the $0.55$ bar
+and an interval, $[+6.5, +19.0]$, that excludes zero. Smaller than T3's
+$+16.7$ but unambiguously real, and it survived the honest version of the
+comparison: the blind arm was given its own calibrated speed \emph{and}
+lateral bias over the same grid the aware arm searched (a fixed bias of
+$+0.5$\,cm, worth $0.697$; the naive centred placement scores only $0.50$,
+and quoting that as the baseline would have inflated the premium to
+$+32$). Three iterations, each leaving a measured law behind:
 
 \begin{enumerate}[leftmargin=1.6em,itemsep=0.15em]
 \item \textbf{A monotone choice against a $c$-independent floor can never
@@ -471,7 +476,9 @@ worth stating in the paper.
 \item With both arms calibrated over the same grid --- aware gets a
 per-bucket (speed, bias) plus the COM correction, blind gets one calibrated
 pair, which is the best a $c$-blind controller can do since the COM angle is
-uniform --- the premium is $+17.2$.
+uniform --- the premium is $+12.7 \pm 6.2$. Every one of the 20 calibrated
+cells chose the same carry speed, independently confirming law~(i): the speed
+lever is inert, and the entire premium comes from the committed placement.
 \end{enumerate}
 
 \begin{figure}[h]

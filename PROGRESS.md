@@ -18,9 +18,36 @@ narrow beam (12×3.6×2.4 cm), grasp the beam at its free end, carry the stack
 `dynmod/envs/tasks.py` (+ teacher twin), gate in
 `dynmod/scripts/premium_gate_t8.py`.
 
-**Verdict at 64 episodes/arm: aware 0.86 vs blind 0.69, premium +17.2** —
-healthy success far above the 0.55 bar and a premium edging T3's +16.7. Full
-512-episode gate running. Three iterations, each producing a measured law:
+**VERDICT (512 episodes/arm): aware 0.824 vs blind 0.697, premium
++12.7 ± 6.2** — healthy success far above the 0.55 bar, interval
+[+6.5, +19.0] excluding zero. Smaller than T3's +16.7 but real, and it
+survived the honest version of the comparison: the blind arm got its own
+calibrated speed AND lateral bias over the same grid the aware arm searched
+(best fixed bias +0.5 cm → 0.697; the naive centred placement scores 0.50,
+and quoting *that* as the baseline would have inflated the premium to +32).
+All 20 calibrated cells chose the same carry speed, independently confirming
+that the speed lever is inert and the whole premium comes from the committed
+placement.
+
+**Full program launched** (user instruction: "if the task passes our test,
+start the full-fledged policy training and evaluation program") —
+`dynmod/scripts/t8_chain.py`: gate → teacher certification → 10³/10⁴ datasets
+(backed up on completion) → 120-arm matrix → 4 sharded evaluation workers →
+`reports/t8_slopes_summary.txt`. Each stage is a gate that stops the chain
+with a reason rather than producing data nobody can trust.
+
+Pipeline integration T8 needed (two objects, unlike every earlier task):
+`OBS_LAYOUTS` registry — T8 is 54-d with the block's 13-d state contiguous at
+[38:51] (verified against the live sim), and arm B's prediction head targets
+the BLOCK, since the beam is rigidly gripped and merely follows the arm;
+`--layout` through `train.py` and `launch_main_arms`; `--horizon` through
+`train_eval_loop` (T8 episodes are 140 steps, not 200). And one real
+correctness fix: `evaluate.py` tagged the δ-grid against the DEFAULT training
+spec, but T8 trains COM offsets to 0.4, so grid points that are interpolation
+for T8 were being labelled extrapolation — it now re-tags from the env's own
+`c_spec`.
+
+Three iterations, each producing a measured law:
 
 **Iteration 1 — speed as the knowledge lever: structurally zero.** First
 design made the carry SPEED the choice (slip off a wide slab if too fast,
