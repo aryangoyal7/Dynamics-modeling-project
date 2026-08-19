@@ -27,7 +27,8 @@ import numpy as np
 import torch
 
 import dynmod.envs  # noqa: F401
-from dynmod.envs.delta_grid import make_grid
+from dynmod.envs.delta_grid import (components_out_of_range, delta_of,
+                                    make_grid, tag_of)
 from dynmod.policy.model import FlowPolicy
 
 
@@ -61,6 +62,17 @@ def main():
         control_mode=args.control_mode, sim_backend="physx_cuda",
         randomize_c=False, c_override=c_override,
     )
+    # Re-tag against the env's OWN training spec. The grid points themselves
+    # are fixed constants, but which of them count as in-range depends on the
+    # task: T8 trains over COM offsets up to 0.4, so grid points the default
+    # spec (0.15) calls extrapolation are interpolation there. Tagging with
+    # the wrong spec would silently mislabel the per-tag slope comparisons.
+    spec = env.unwrapped.c_spec
+    for g in grid:
+        g["out_of_range"] = components_out_of_range(g, spec)
+        g["tag"] = tag_of(g, spec)
+        g["delta"] = round(delta_of(g, spec), 4)
+
     device = env.unwrapped.device
     model.to(device)
     mean = torch.as_tensor(normalizer["obs_mean"], device=device, dtype=torch.float32)

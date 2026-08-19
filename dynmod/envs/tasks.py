@@ -1320,9 +1320,15 @@ class StackCarryT8Env(DynBaseEnv):
         )
 
     def _task_state_obs(self):
+        # the BLOCK's full 13-d state is kept contiguous and in the same
+        # pose/lin/ang order the base class uses for the manipulated object:
+        # it is this task's physics-bearing object (the beam is rigidly held,
+        # so its motion is the arm's, like T4's grasped cube), and arm B's
+        # prediction head is pointed at it. See OBS_LAYOUTS["t8"].
         return dict(
             top_pose=self.top.pose.raw_pose,
             top_lin_vel=self.top.linear_velocity,
+            top_ang_vel=self.top.angular_velocity,
             goal_pos=self.goal_marker.pose.p,
         )
 

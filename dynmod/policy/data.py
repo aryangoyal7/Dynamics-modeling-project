@@ -29,6 +29,16 @@ from torch.utils.data import Dataset
 # qpos[0:9] qvel[9:18] tcp_pose[18:25] obj_pose[25:32] obj_lin_vel[32:35]
 # obj_ang_vel[35:38] slot_pos[38:41]
 OBS_LAYOUT_T3 = dict(obs_dim=41, obj_slice=(25, 38))
+
+# StackCarryT8-v1 carries two objects, so the layout differs: the first 38
+# dims are as above with the BEAM as obj, then the block's 13-d state
+# (pose[38:45] lin_vel[45:48] ang_vel[48:51]) and goal_pos[51:54]. The
+# prediction head is pointed at the BLOCK - the beam is rigidly gripped
+# during the carry, so its motion is the arm's, not the physics'.
+OBS_LAYOUT_T8 = dict(obs_dim=54, obj_slice=(38, 51))
+
+# T4 (PickPlaceT4-v1) matches T3's dimensions: 38 + goal_pos(3).
+OBS_LAYOUTS = dict(t3=OBS_LAYOUT_T3, t4=OBS_LAYOUT_T3, t8=OBS_LAYOUT_T8)
 SETTLE_MARGIN = 5
 
 

@@ -56,6 +56,8 @@ def main():
     p.add_argument("--env-id", default="SlideToSlotT3-v1")
     p.add_argument("--episodes", type=int, default=20)
     p.add_argument("--control-mode", default="pd_ee_delta_pos")
+    p.add_argument("--horizon", type=int, default=200,
+                   help="must not exceed the env's max_episode_steps")
     p.add_argument("--shard", type=int, default=0)
     p.add_argument("--shards", type=int, default=1)
     args = p.parse_args()
@@ -80,6 +82,7 @@ def main():
             r = subprocess.run([PY, "-m", "dynmod.policy.evaluate",
                                 "--ckpt", ck, "--env-id", args.env_id,
                                 "--episodes", str(args.episodes),
+                                "--horizon", str(args.horizon),
                                 "--control-mode", args.control_mode,
                                 "--name", name])
             if r.returncode != 0:

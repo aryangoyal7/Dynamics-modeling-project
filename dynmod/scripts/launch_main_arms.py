@@ -34,7 +34,7 @@ ARMS = [
 OUT_ROOT = "/mnt/scratch/dynamics/policy_runs"
 
 
-def build_matrix(data_root, prefix, scales, seeds, steps):
+def build_matrix(data_root, prefix, scales, seeds, steps, layout="t3"):
     runs = []
     for scale in scales:
         data = os.path.join(data_root, f"{prefix}_{scale}")
@@ -47,7 +47,7 @@ def build_matrix(data_root, prefix, scales, seeds, steps):
                         sys.executable, "-m", "dynmod.policy.train",
                         "--data", data, "--arm", arm, "--target", target,
                         "--seed", str(seed), "--steps", str(steps),
-                        "--out-name", name,
+                        "--layout", layout, "--out-name", name,
                     ],
                 ))
     return runs
@@ -66,11 +66,14 @@ def main():
                         "packs several")
     p.add_argument("--track", action="store_true",
                    help="pass --track (Weights & Biases) to every run")
+    p.add_argument("--layout", default="t3",
+                   help="observation layout of the task (see "
+                        "dynmod.policy.data.OBS_LAYOUTS)")
     p.add_argument("--dry-run", action="store_true")
     args = p.parse_args()
 
     runs = build_matrix(args.data_root, args.prefix, args.scales, args.seeds,
-                        args.steps)
+                        args.steps, args.layout)
     pending = [r for r in runs
                if not os.path.exists(os.path.join(OUT_ROOT, r["name"], "final_ckpt.pt"))]
     print(f"{len(runs)} runs in matrix, {len(runs) - len(pending)} already "

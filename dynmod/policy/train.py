@@ -32,7 +32,7 @@ import torch
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
-from dynmod.policy.data import OBS_LAYOUT_T3, TrajectoryDataset
+from dynmod.policy.data import OBS_LAYOUTS, TrajectoryDataset
 from dynmod.policy.model import ARMS, TARGETS, FlowPolicy, PolicyConfig
 
 DEFAULT_OUT_ROOT = "/mnt/scratch/dynamics/policy_runs"
@@ -71,6 +71,10 @@ def main():
     p.add_argument("--jacobian-penalty", type=float, default=0.0)
     p.add_argument("--data-fraction", type=float, default=1.0)
     p.add_argument("--schedule-mult", type=float, default=1.0)
+    p.add_argument("--layout", choices=sorted(OBS_LAYOUTS), default="t3",
+                   help="observation layout of the task the data came "
+                        "from; picks obs_dim and the slice the "
+                        "prediction head targets")
     p.add_argument("--out-name", default=None)
     p.add_argument("--out-root", default=DEFAULT_OUT_ROOT)
     p.add_argument("--num-workers", type=int, default=4)
@@ -106,9 +110,10 @@ def main():
     with open(os.path.join(out, "args.json"), "w") as fp:
         json.dump(vars(args), fp, indent=1)
 
+    layout = OBS_LAYOUTS[args.layout]
     common = dict(
         K=args.K, chunk=args.chunk, pred_h=args.pred_h,
-        obs_dim=OBS_LAYOUT_T3["obs_dim"], obj_slice=OBS_LAYOUT_T3["obj_slice"],
+        obs_dim=layout["obs_dim"], obj_slice=layout["obj_slice"],
         seed=args.seed,
     )
     train_ds = TrajectoryDataset(args.data, data_fraction=args.data_fraction, **common)
@@ -121,8 +126,8 @@ def main():
     val_loader = DataLoader(val_ds, batch_size=args.batch, num_workers=0)
 
     cfg = PolicyConfig(
-        obs_dim=OBS_LAYOUT_T3["obs_dim"],
-        obj_dim=OBS_LAYOUT_T3["obj_slice"][1] - OBS_LAYOUT_T3["obj_slice"][0],
+        obs_dim=layout["obs_dim"],
+        obj_dim=layout["obj_slice"][1] - layout["obj_slice"][0],
         act_dim=train_ds.act[0].shape[-1],
         K=args.K, chunk=args.chunk, pred_h=args.pred_h,
         arm=args.arm, target=args.target, lam=args.lam,
