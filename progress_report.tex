@@ -306,6 +306,16 @@ T6 Push-T, precision, high power & $-0.2$ to $+0.6 \pm 3.1$; 94 vs 90.5 steps & 
 \end{tabular}
 \end{center}
 
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.75\textwidth]{figs/gate_premiums.png}
+\caption{The validity gate across every task designed so far: measured
+knowledge premium (physics-aware minus physics-blind scripted controller,
+percentage points, $\pm$95\% CI). Only T3 --- where the launch is committed
+and no correction is possible --- pays for physics knowledge; every
+correctable or chaotic design ties at zero.}
+\end{figure}
+
 Two design laws emerged, both measured rather than assumed. (1)~\textbf{Both
 failure directions must cost something}: wherever overshoot or a redo is free
 (T1 dump, T2, pre-roof T3), one fixed blind action ties the physics-aware
@@ -333,6 +343,57 @@ control sits at A's level --- the prediction \emph{content} injects physics
 knowledge into the network --- and friction/COM stay undecodable, physically
 correct for a grasped object. Together: \emph{knowledge without effect}, exactly
 what a control task should show.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.95\textwidth]{figs/t4_control.png}
+\caption{T4 control, both halves of the result. Left: degradation slopes are
+statistically identical across all six arms (10 seeds each) --- on a task
+where physics cannot matter, the prediction head changes nothing. Right:
+the same B-multistep networks nevertheless carry twice the decodable mass
+information of A (MLP probe $R^2$, mean over 10 seeds), while the shuffled
+control sits at the untrained baseline --- it is the prediction
+\emph{content} that injects the knowledge.}
+\end{figure}
+
+\section{First main-task evidence: A vs B at $10^3$ demonstrations}
+All \textbf{120 T3 arms} at the $10^3$/$10^4$ scales finished their 150k
+training steps with zero failures (checkpoints on persistent storage). The
+first preregistered main-task comparison is in --- \textbf{10 seeds of A vs 10
+seeds of B-multistep at the $10^3$ scale}:
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Arm} & \textbf{All-tag degradation slope} & \\
+\midrule
+A (no prediction head) & $+0.0157 \pm 0.0017$ & \\
+B-multistep & $+0.0131 \pm 0.0019$ & directionally $\sim$17\% shallower \\
+B-onestep (2 seeds so far) & $+0.0145 \pm 0.0039$ & \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The 95\% CIs overlap on every tag, so under the preregistered rule the
+verdict at this scale is \textbf{effect absent} --- reported as such. The
+overlap on the headline ``all'' tag is marginal (the intervals nearly touch,
+Figure~\ref{fig:t3result}), which is exactly the situation the $10^4$ and
+$10^5$ tiers exist to resolve: if the prediction head helps, its advantage
+should grow (or vanish) with data, and both arms' remaining variants
+(B-latent, B-shuffled, C) complete the causal picture. Those evaluations are
+running now.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.98\textwidth]{figs/t3_1e3_result.png}
+\caption{First main-task result, $10^3$ scale. Left: success under
+increasing physics shift $\delta$ (mean over seeds, binned over the
+$\delta$-grid). Right: per-seed degradation slopes, mean $\pm$ 95\% t-CI
+(interpolation tag omitted: too few grid points for a stable per-seed fit).
+A vs B-multistep CIs overlap $\Rightarrow$ no effect at this scale under the
+preregistered rule.}
+\label{fig:t3result}
+\end{figure}
 
 \section{Measurement tools, validated the hard way}
 Probes (small readouts measuring how much physics knowledge a policy's internals
@@ -368,23 +429,26 @@ launches --- absorbed by many episodes per grid point.
 (this report, \texttt{PROGRESS.md}); task/protocol changes only before arm launch.
 \end{itemize}
 
-\section{Status: everything runs in parallel tonight}
-Live allocation across the 8 GPUs (as of this update): five GPUs train the
-\textbf{T3 arm matrix} --- A, B (one-step / multi-step / latent), B-shuffled, C
-$\times$ 10 seeds $\times$ $10^3$/$10^4$ demonstrations, 150k steps each, 15
-concurrent (the earlier 60k quick-train left students too weak: 22.5\% vs the
-teacher's 64\%); one GPU generates the $10^5$ dataset; one trains the
-base-fails gate policy (now informational --- its failure mode would extend the
-\emph{evaluation} grid, not change training); one runs the T6 gate and the
-\textbf{evaluate-as-they-finish loop}, which grid-evaluates every arm the moment
-its training ends and runs all slope comparisons automatically when the matrix
-drains.
+\section{Status: paused cleanly, resumed, finishing the matrix}
+The machine was shut down by the user on 2026-08-18 night after a clean pause
+(all processes stopped, every checkpoint and dataset verified on persistent
+storage). \textbf{Resumed 2026-08-19}: environment rebuilt from the saved
+recipe in 6 minutes, 7.8\,GB of checkpoints and both certified datasets
+restored, and the remaining work relaunched in parallel --- \textbf{four
+evaluation shards} (GPUs 3/4/6/7) working through the $\sim$98 remaining
+$10^3$/$10^4$ grid evaluations (the slope summary generates automatically when
+they drain), the \textbf{$10^5$ dataset regenerating} on GPU~1 (the pre-pause
+partial was unusable: the physics-metadata sidecar is only written at
+completion), chained so that the moment it finishes, the \textbf{60 new
+$10^5$ arms} start training across all GPUs. The shutdown supervisor is
+re-armed.
 
 \begin{enumerate}[leftmargin=1.6em,itemsep=0.1em]
-\item \open{} First A-vs-B evidence (10 A seeds vs 5 B seeds, $10^3$ scale):
-$\sim$5--6\,h from launch. Full T3 slope answer (the headline test): $\sim$20\,h.
-\item T6 high-power gate: \fail{} --- zero premium confirmed; T6 closed at the
-gate stage, its boundary finding documented (Section~8).
+\item \pass{} First A-vs-B evidence at $10^3$: in (Section~10) --- no effect
+at that scale, B directionally shallower.
+\item \open{} Full three-scale, six-arm slope answer (the headline test):
+$10^4$ evaluations $\sim$4--5\,h; $10^5$ dataset $\sim$4.5\,h, then its 60
+arms train overnight.
 \item Then: $\lambda$ sweep (100 runs); substitution arms only if the effect
 exists; probes + emergence curves from the log-spaced checkpoints; vision arms
 ($\sim$1\,TB data step) later.
