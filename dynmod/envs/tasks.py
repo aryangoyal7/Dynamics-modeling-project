@@ -1209,6 +1209,121 @@ class RouteChoiceT7Env(SlideToSlotT3Env):
 
 
 # =========================================================================== #
+# T8: stack two different shapes, then carry the stack to a goal zone.        #
+# =========================================================================== #
+@register_env("StackCarryT8-v1", max_episode_steps=140)
+class StackCarryT8Env(DynBaseEnv):
+    """Stack-and-carry (added 2026-08-19 on user direction). Place a cube on
+    a slab, then grasp the slab and carry the whole stack to a goal zone,
+    under a hard step budget.
+
+    Where the physics knowledge lives (per the two measured design laws):
+      - The CARRY SPEED is a committed choice priced in both directions: the
+        cube rides on the slab held only by surface friction, so accelerating
+        beyond the friction cone topples or slides it off (irreversible - no
+        time to re-stack), while crawling misses the 140-step deadline.
+        The safe maximum depends on the hidden friction and mass.
+      - The PLACEMENT OFFSET is committed at release: the cube's hidden COM
+        (up to 40% of its half-width, invisible) decides whether the stack
+        survives the carry accelerations; only knowledge of c can center the
+        COM over the slab rather than the geometric shape.
+    """
+
+    BASE_HALF = [0.06, 0.032, 0.014]  # slab: long x, graspable across y
+    TOP_HALF = 0.03  # cube
+    TOP_SEAT_DX = 0.025  # cube seat on +x half; slab grasped at the -x end
+    GRASP_DX = -0.04
+    BASE_SPAWN = (-0.10, -0.16)
+    TOP_SPAWN = (0.06, -0.16)
+    GOAL_XY = (-0.10, 0.18)
+    goal_tol = 0.04
+    static_vel = 0.05
+    release_dist = 0.06
+    C_SPEC_KW = dict(com_frac_max=0.4)  # T6 lesson: 0.15 is sub-measurable
+
+    def _build_task(self, options: dict):
+        # slab: per-env friction/density but NO hidden COM (the cube carries it)
+        base_c = dict(self._c)
+        base_c["com_x_frac"] = np.zeros(self.num_envs)
+        base_c["com_y_frac"] = np.zeros(self.num_envs)
+        self.obj = build_randomized_box(
+            self, self.BASE_HALF, base_c, name="slab")
+        self.top = build_randomized_box(
+            self, self.TOP_HALF, self._c, name="cube", base_density=600.0)
+        builder = self.scene.create_actor_builder()
+        green = sapien.render.RenderMaterial(base_color=[0.1, 0.7, 0.1, 1])
+        builder.add_box_visual(half_size=[0.05, 0.05, 6e-4], material=green)
+        builder.initial_pose = sapien.Pose(
+            p=[self.GOAL_XY[0], self.GOAL_XY[1], 1e-3])
+        self.goal_marker = builder.build_kinematic(name="goal_marker")
+
+    def _init_task(self, env_idx: torch.Tensor):
+        b = len(env_idx)
+        jitter = (
+            torch.zeros((b, 4), device=self.device)
+            if self.deterministic_spawn
+            else (torch.rand((b, 4), device=self.device) * 2 - 1) * 0.02
+        )
+        for actor, spawn, z, j in (
+            (self.obj, self.BASE_SPAWN, self.BASE_HALF[2], jitter[:, :2]),
+            (self.top, self.TOP_SPAWN, self.TOP_HALF, jitter[:, 2:]),
+        ):
+            xyz = torch.zeros((b, 3), device=self.device)
+            xyz[:, 0] = spawn[0] + j[:, 0]
+            xyz[:, 1] = spawn[1] + j[:, 1]
+            xyz[:, 2] = z
+            q = torch.zeros((b, 4), device=self.device)
+            q[:, 0] = 1.0
+            actor.set_pose(Pose.create_from_pq(p=xyz, q=q))
+            actor.set_linear_velocity(torch.zeros((b, 3), device=self.device))
+            actor.set_angular_velocity(torch.zeros((b, 3), device=self.device))
+
+    def evaluate(self):
+        base_p = self.obj.pose.p
+        top_p = self.top.pose.p
+        goal = torch.tensor(self.GOAL_XY, device=self.device)
+        goal_dist = torch.linalg.norm(base_p[:, :2] - goal[None], dim=1)
+        at_goal = goal_dist < self.goal_tol
+        # the cube must still ride the slab, upright
+        riding = (
+            (torch.linalg.norm(top_p[:, :2] - base_p[:, :2], dim=1) < 0.055)
+            & ((top_p[:, 2] - base_p[:, 2]) > 0.03)
+        )
+        upright = _quat_zz(self.top.pose.q) > 0.85
+        placed = base_p[:, 2] < 0.03
+        speed = torch.linalg.norm(self.obj.linear_velocity, dim=1)
+        static = speed < self.static_vel
+        tcp_dist = self._tcp_to_obj_dist()
+        released = tcp_dist > self.release_dist
+        stack_ok = riding & upright
+        return dict(
+            success=at_goal & stack_ok & placed & static & released,
+            stack_ok=stack_ok,
+            at_goal=at_goal,
+            obj_to_goal_dist=goal_dist,
+            tcp_to_obj_dist=tcp_dist,
+            obj_speed=speed,
+        )
+
+    def _task_state_obs(self):
+        return dict(
+            top_pose=self.top.pose.raw_pose,
+            top_lin_vel=self.top.linear_velocity,
+            goal_pos=self.goal_marker.pose.p,
+        )
+
+    def compute_dense_reward(self, obs: Any, action: torch.Tensor, info: Dict):
+        reach = 1 - torch.tanh(5.0 * (info["tcp_to_obj_dist"] - 0.02).clamp(min=0))
+        goal = 1 - torch.tanh(4.0 * info["obj_to_goal_dist"])
+        reward = 0.5 * reach + 2.0 * goal + 1.5 * info["stack_ok"].float()
+        reward[info["success"]] = 6.0
+        return reward
+
+    def compute_normalized_dense_reward(self, obs, action, info):
+        return self.compute_dense_reward(obs, action, info) / 6.0
+
+
+# =========================================================================== #
 # Teacher twins: identical tasks with c exposed in the observation.           #
 # =========================================================================== #
 def _teacher(cls):
@@ -1238,6 +1353,9 @@ CliffTossT5TeacherEnv = register_env("CliffTossT5Teacher-v1", max_episode_steps=
 )
 DynPushT6TeacherEnv = register_env("DynPushT6Teacher-v1", max_episode_steps=150)(
     _teacher(DynPushT6Env)
+)
+StackCarryT8TeacherEnv = register_env("StackCarryT8Teacher-v1", max_episode_steps=140)(
+    _teacher(StackCarryT8Env)
 )
 RouteChoiceT7TeacherEnv = register_env("RouteChoiceT7Teacher-v1", max_episode_steps=200)(
     _teacher(RouteChoiceT7Env)
