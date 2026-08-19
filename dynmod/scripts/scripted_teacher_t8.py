@@ -33,7 +33,8 @@ import torch
 
 import dynmod.envs  # noqa: F401
 from dynmod.envs.randomization import C_KEYS, GRANULAR_KEYS
-from dynmod.scripts.premium_gate_t8 import StackCarryController, com_y
+from dynmod.scripts.premium_gate_t8 import (BIASES, SPEEDS,
+                                            StackCarryController, com_y)
 from mani_skill.utils.wrappers import RecordEpisode
 
 REPORTS = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..",
@@ -43,11 +44,10 @@ ENV_ID = "StackCarryT8-v1"
 HORIZON = 140
 
 # calibration grid: same axes and resolution the T3 teacher needed (the 3x3
-# table left inter-bucket physics mistuned and failed the spread gate)
+# table left inter-bucket physics mistuned and failed the spread gate).
+# SPEEDS/BIASES are imported so the teacher and the gate search ONE grid.
 MASS = np.exp(np.linspace(np.log(0.7), np.log(1.4), 5)).round(3)
 FRICTION = np.exp(np.linspace(np.log(0.3), np.log(0.7), 4)).round(3)
-SPEEDS = [0.4, 0.55]
-BIASES = [0.0025, 0.005, 0.0075, 0.010, 0.015]
 
 
 def make(n, **kw):

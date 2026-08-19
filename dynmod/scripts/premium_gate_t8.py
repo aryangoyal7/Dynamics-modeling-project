@@ -43,11 +43,15 @@ import dynmod.envs  # noqa: F401
 
 MASS_B = [0.75, 1.0, 1.35]
 FRICTION_B = [0.33, 0.5, 0.68]
-SPEEDS = [0.4, 0.55]
+# v2 (gate iteration 4): every one of the 20 calibrated cells chose 0.4, the
+# grid's slowest candidate - the optimum sat at or below the lower edge, and
+# the heavy cells were starved by it (mass 1.4, friction 0.3: 0.36 at speed
+# 0.4 vs 0.68 at 0.25-0.3). 0.2 is too slow: it finishes at step ~138 of 140.
+SPEEDS = [0.25, 0.3, 0.4]
 # lateral seat bias, metres: where the block's COM should sit relative to the
 # beam center line. Measured optimum is around +1.0 to +1.5 cm (the carry's
 # opening acceleration throws the block the other way), never 0.
-BIASES = [0.0025, 0.005, 0.0075, 0.010, 0.015]
+BIASES = [0.00125, 0.0025, 0.005, 0.0075, 0.010]
 HORIZON = 140
 TRANSIT_V = 0.7
 # heights (TCP), from the geometry: beam top 0.024, block half-height 0.05

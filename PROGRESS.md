@@ -47,7 +47,34 @@ spec, but T8 trains COM offsets to 0.4, so grid points that are interpolation
 for T8 were being labelled extrapolation — it now re-tags from the env's own
 `c_spec`.
 
-Three iterations, each producing a measured law:
+**Iteration 4 — the chain stopped itself at teacher certification.** The
+program ran gate → certification and then HALTED, exactly as designed: the
+calibrated teacher is strong on average (mean **0.774**, bar 0.55) but
+**uneven — worst per-axis marginal spread 0.378**, far past the 0.10 bar.
+The marginals name the culprit precisely:
+
+- `com_frac` [0.777, 0.762, 0.784] — dead flat. The COM compensation works;
+  the knowledge-bearing axis is exactly as even as it should be.
+- `mass_mult` [0.875, 0.898, 0.841, 0.737, **0.521**] — heavy blocks fail.
+- `friction` [**0.617**, 0.783, 0.744, 0.954] — slippery surfaces fail.
+
+Diagnosis from the calibration table, not guesswork: **all 20 cells chose
+0.4, the slowest speed on offer**, which means the optimum sat at or below
+the grid's lower edge and the hard cells were starved by it. A focused probe
+on the worst cell (mass 1.4, friction 0.3) confirmed it — success 0.36 at
+speed 0.4 versus **0.68 at speed 0.25-0.3** — and also found the floor: at
+speed 0.2 the episode finishes at step ~138 of 140, so the deadline, not the
+physics, takes over. Fix: speeds widened DOWNWARD to [0.25, 0.3, 0.4],
+calibration episodes 8 → 32 (the 8-episode read had a winner's curse: best
+cells "reached" 1.000 on ±0.17 noise). The gate is being re-run on the same
+widened family so the aware-vs-blind comparison stays apples-to-apples rather
+than quietly benefiting from a grid the gate never searched.
+
+Worth noting what this cost: nothing. The certification gate caught a bad
+teacher before it generated 11,000 demonstrations and 120 training runs built
+on them — which is the entire reason the bar exists.
+
+Three earlier iterations, each producing a measured law:
 
 **Iteration 1 — speed as the knowledge lever: structurally zero.** First
 design made the carry SPEED the choice (slip off a wide slab if too fast,
