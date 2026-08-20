@@ -41,12 +41,17 @@ import torch
 
 import dynmod.envs  # noqa: F401
 
-MASS_B = [0.75, 1.0, 1.35]
-FRICTION_B = [0.33, 0.5, 0.68]
-# v2 (gate iteration 4): every one of the 20 calibrated cells chose 0.4, the
-# grid's slowest candidate - the optimum sat at or below the lower edge, and
-# the heavy cells were starved by it (mass 1.4, friction 0.3: 0.36 at speed
-# 0.4 vs 0.68 at 0.25-0.3). 0.2 is too slow: it finishes at step ~138 of 140.
+MASS_B = [0.75, 0.9, 1.05]   # inside the narrowed training range
+FRICTION_B = [0.38, 0.5, 0.65]
+# v3. Iteration 4: every one of 20 calibrated cells chose 0.4, the grid's
+# slowest candidate - the optimum sat at or below the lower edge and the heavy
+# cells were starved by it (mass 1.4, friction 0.3: 0.36 at speed 0.4 vs 0.68
+# at 0.25-0.3). Iteration 5: with 0.25 available the teacher certified at
+# spread 0.109 against a 0.10 bar, still lagging at the heavy end, because
+# 0.2 finished at step ~138 of a 140 budget - the DEADLINE, not the physics,
+# capped that corner. The budget is now 160 steps so the slowest candidate is
+# affordable. Placement stays the paying lever at every speed: the bias
+# response is as steep at 0.25 (0.68/0.55/0.45/0.27) as at 0.4.
 SPEEDS = [0.25, 0.3, 0.4]
 # lateral seat bias, metres: where the block's COM should sit relative to the
 # beam center line. Measured optimum is around +1.0 to +1.5 cm (the carry's

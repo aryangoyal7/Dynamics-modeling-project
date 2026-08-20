@@ -46,8 +46,10 @@ HORIZON = 140
 # calibration grid: same axes and resolution the T3 teacher needed (the 3x3
 # table left inter-bucket physics mistuned and failed the spread gate).
 # SPEEDS/BIASES are imported so the teacher and the gate search ONE grid.
-MASS = np.exp(np.linspace(np.log(0.7), np.log(1.4), 5)).round(3)
-FRICTION = np.exp(np.linspace(np.log(0.3), np.log(0.7), 4)).round(3)
+# axes match StackCarryT8Env.C_SPEC_KW, which narrows mass/friction relative
+# to the study defaults (see the env docstring for the measured reason)
+MASS = np.exp(np.linspace(np.log(0.7), np.log(1.1), 5)).round(3)
+FRICTION = np.exp(np.linspace(np.log(0.35), np.log(0.7), 4)).round(3)
 
 
 def make(n, **kw):
@@ -101,17 +103,24 @@ def run_calibrate(args):
     candidates in ONE batched env - the whole grid is 40 x 10 = 400 envs."""
     cells = [(m, f) for m in MASS for f in FRICTION]
     combos = [(sp, b) for sp in SPEEDS for b in BIASES]
-    n = len(cells) * len(combos)
+    R = args.replicas
+    # Each (cell, combo) gets R parallel envs. Without replication every
+    # configuration is measured at a SINGLE hidden COM angle, and the angle
+    # decides how much of the offset lands on the beam's narrow axis - it is
+    # a nuisance parameter with a huge effect. Measured consequence of the
+    # unreplicated version: calibration read 0.938 for a cell that
+    # certification then measured at 0.06.
+    n = len(cells) * len(combos) * R
     c_override = dict(
-        mass_mult=np.array([m for (m, f) in cells for _ in combos]),
-        friction=np.array([f for (m, f) in cells for _ in combos]),
+        mass_mult=np.array([m for (m, f) in cells for _ in combos for _ in range(R)]),
+        friction=np.array([f for (m, f) in cells for _ in combos for _ in range(R)]),
         com_frac=np.full(n, 0.2),
     )
     env = make(n, randomize_c=False, c_override=c_override)
     base = env.unwrapped
-    speeds = torch.tensor([s for _ in cells for (s, _) in combos],
+    speeds = torch.tensor([s for _ in cells for (s, _) in combos for _ in range(R)],
                           dtype=torch.float32, device=base.device)
-    bias = torch.tensor([b for _ in cells for (_, b) in combos],
+    bias = torch.tensor([b for _ in cells for (_, b) in combos for _ in range(R)],
                         dtype=torch.float32, device=base.device)
 
     success = np.zeros(n)
@@ -125,10 +134,10 @@ def run_calibrate(args):
     env.close()
     success /= args.episodes
 
+    success = success.reshape(len(cells), len(combos), R).mean(axis=2)
     table, detail = {}, {}
-    k = len(combos)
     for i, (m, f) in enumerate(cells):
-        s = success[i * k:(i + 1) * k]
+        s = success[i]
         best = int(np.argmax(s))
         table[f"{f}_{m}"] = list(combos[best])
         detail[f"{f}_{m}"] = dict(best=list(combos[best]),
@@ -147,8 +156,10 @@ def run_flatness(args):
     COM = np.array([0.0, 0.2, 0.4])
     points = [dict(mass_mult=m, friction=f, com_frac=o)
               for m, f, o in itertools.product(MASS, FRICTION, COM)]
-    n = len(points)
-    c_override = {k: np.array([p[k] for p in points]) for k in points[0]}
+    R = args.replicas  # independent hidden COM angles per point - see run_calibrate
+    n = len(points) * R
+    c_override = {k: np.array([p[k] for p in points for _ in range(R)])
+                  for k in points[0]}
     env = make(n, randomize_c=False, c_override=c_override)
     base = env.unwrapped
 
@@ -158,7 +169,7 @@ def run_flatness(args):
         speeds, comp = lookup(base, base.get_c(), args.calib)
         success_once += rollout(env, speeds, comp, seed=None).cpu().numpy()
     env.close()
-    success_once /= args.episodes
+    success_once = (success_once / args.episodes).reshape(len(points), R).mean(axis=1)
 
     result = dict(
         ckpt="scripted_teacher_t8 (calibrated c-aware)", episodes=args.episodes,
@@ -229,6 +240,9 @@ def main():
     p.add_argument("--calib-out", default=None)
     p.add_argument("--tag", default="flat_t8_aware_v1")
     p.add_argument("--episodes", type=int, default=32)
+    p.add_argument("--replicas", type=int, default=8,
+                   help="parallel envs per configuration, each with an "
+                        "independent hidden COM angle")
     p.add_argument("--num-envs", type=int, default=200)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--out")

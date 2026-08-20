@@ -1251,7 +1251,22 @@ class StackCarryT8Env(DynBaseEnv):
     goal_tol = 0.04
     static_vel = 0.05
     release_dist = 0.06
-    C_SPEC_KW = dict(com_frac_max=0.4)  # T6 lesson: 0.15 is sub-measurable
+    # com_frac_max: T6 lesson, 0.15 is sub-measurable on a small object.
+    # mass/friction narrowed from the study defaults (0.7-1.4, 0.3-0.7). The
+    # heavy end is excluded for a MEASURED mechanical reason: the stack hangs
+    # off the beam's free end, so its weight torques the beam inside the
+    # gripper, and the beam's tilt during the carry rises from 2.7 deg median
+    # at mass 0.7 to 8.6 deg at mass 1.2 - tilting the block's own support
+    # surface by more than any placement can answer. That corner is not
+    # teachable by any calibration (certification failed there and only
+    # there), so it is out of the TRAINING range. Two alternatives were tried
+    # and measured worse: lightening the block fixed the tilt but erased the
+    # premium (aware 1.00 vs blind 1.00 - the T2 trap), and narrowing the beam
+    # restored difficulty without restoring the advantage. The delta grid
+    # still probes far outside these ranges, and evaluate.py re-tags
+    # interpolation/extrapolation from this spec.
+    C_SPEC_KW = dict(com_frac_max=0.4, mass_mult_range=(0.7, 1.1),
+                     friction_range=(0.35, 0.7))
 
     def _build_task(self, options: dict):
         # beam: per-env friction/density but NO hidden COM (the block owns it)

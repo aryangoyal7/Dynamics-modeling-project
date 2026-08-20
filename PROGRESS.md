@@ -74,6 +74,43 @@ Worth noting what this cost: nothing. The certification gate caught a bad
 teacher before it generated 11,000 demonstrations and 120 training runs built
 on them — which is the entire reason the bar exists.
 
+**Iterations 5–8 — certifying the teacher, and the tension it exposed.**
+Four more rounds, each driven by a measurement rather than a guess:
+
+1. *A measurement bug, found by contradiction.* Calibration read **0.938**
+   for a cell certification then measured at **0.06**. Cause: both used ONE
+   env per configuration, so the hidden COM **angle** — which decides how
+   much of the offset lands on the beam's narrow axis — was confounded with
+   the cell. Both now replicate every configuration over independent angles
+   (`--replicas`). Spread immediately fell 0.378 → 0.109.
+2. *The step budget was not the cap.* Certification still failed at the
+   heaviest bucket alone, so the budget went 140 → 160 with speed 0.2 added.
+   Result: 0.109 → 0.107. Hypothesis wrong, and the measurement said so.
+3. *The real mechanism.* The stack hangs off the beam's free end, so its
+   weight torques the beam **inside the gripper**: measured tilt during the
+   carry rose from **2.7° median at mass 0.7 to 8.6° at mass 1.2**, tilting
+   the block's own support surface by more than any placement can answer.
+4. *Two fixes that made things worse, and the one that worked.* Lightening
+   the block cured the tilt and **erased the premium** (aware 1.00 vs blind
+   1.00 — the T2 trap arriving on schedule); narrowing the beam restored the
+   difficulty but not the advantage (blind ≥ aware everywhere). Both reverted.
+   What worked was excluding the unteachable corner from the TRAINING range —
+   mass 0.7–1.1, friction 0.35–0.7 — leaving the gated configuration
+   otherwise untouched.
+
+**TEACHER CERTIFIED (2026-08-20): mean 0.953, worst per-axis marginal spread
+0.062** (bars: ≥0.55, ≤0.10). The `com_frac` axis is flat at [0.961, 0.955,
+0.944] — the knowledge-bearing axis is the *evenest* one, which is exactly
+what a c-aware teacher should look like.
+
+This left a general lesson worth stating in the paper: **teacher evenness and
+knowledge premium pull in opposite directions along the disturbance axis.**
+Make the task calm enough to teach everywhere and knowledge stops paying;
+make it violent enough to pay and some corner of the physics becomes
+unteachable. The window is found by narrowing the training *range*, not by
+softening the *task*. The premium gate is being re-measured on the final
+configuration, since the ranges changed.
+
 Three earlier iterations, each producing a measured law:
 
 **Iteration 1 — speed as the knowledge lever: structurally zero.** First

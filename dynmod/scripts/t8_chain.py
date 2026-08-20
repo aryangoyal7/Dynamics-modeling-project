@@ -32,7 +32,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 REPORTS = os.path.join(ROOT, "reports")
 DATA = "/mnt/scratch/dynamics/data"
 BACKUP = "/home/azureuser/cloudfiles/code/Users/garyan18/dynamics_modeling/scratch_backup"
-CALIB = os.path.join(REPORTS, "t8_seat_calibration_v1.json")
+CALIB = os.path.join(REPORTS, "t8_seat_calibration_v5.json")
 ENV_ID = "StackCarryT8-v1"
 HORIZON = 140
 STEPS = 150000  # 60k left T3 students too weak to have a gap to attribute
@@ -79,7 +79,7 @@ def step1_premium_gate():
 
 
 def step2_flatness():
-    tag = "flat_t8_aware_v1"
+    tag = "flat_t8_aware_v5"
     out = os.path.join(REPORTS, f"{tag}.json")
     if not os.path.exists(out):
         r = sh([PY, "-m", "dynmod.scripts.scripted_teacher_t8", "--flatness",
