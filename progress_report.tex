@@ -361,62 +361,50 @@ control sits at the untrained baseline --- it is the prediction
 \emph{content} that injects the knowledge.}
 \end{figure}
 
-\section{Main-task result at $10^3$: the prediction \emph{target} matters,
-the prediction \emph{head} does not}
-All \textbf{120 T3 arms} at the $10^3$/$10^4$ scales finished their 150k
-training steps with zero failures. The $10^3$ tier is now evaluated at full
-preregistered power --- 10 seeds on every arm (C at 8 and finishing):
+\section{Main result: both data scales, all six arms \hfill complete}
+All \textbf{120 T3 arms} at the $10^3$/$10^4$ scales trained (150k steps, zero
+failures) and are now \emph{fully evaluated} --- 10 seeds on every arm at both
+scales, 120 grid evaluations, the complete preregistered comparison:
 
 \begin{center}
 \begin{tabular}{@{}lll@{}}
 \toprule
-\textbf{Arm} & \textbf{All-tag slope} & \textbf{vs A (preregistered rule)} \\
+\textbf{Arm} & \textbf{All-tag slope, $10^3$} & \textbf{All-tag slope, $10^4$} \\
 \midrule
-B-onestep         & $+0.0131 \pm 0.0012$ & CIs overlap $\to$ effect absent \\
-B-multistep       & $+0.0131 \pm 0.0019$ & CIs overlap $\to$ effect absent \\
-B-latent          & $+0.0139 \pm 0.0023$ & CIs overlap $\to$ effect absent \\
-C-multistep       & $+0.0144 \pm 0.0022$ & CIs overlap $\to$ effect absent \\
-A (no head)       & $+0.0157 \pm 0.0017$ & --- \\
-B-shuffled        & $+0.0177 \pm 0.0017$ & CIs overlap $\to$ effect absent \\
+B-onestep         & $+0.0131 \pm 0.0012$ & $+0.0128 \pm 0.0025$ \\
+B-multistep       & $+0.0131 \pm 0.0019$ & $+0.0137 \pm 0.0030$ \\
+B-latent          & $+0.0139 \pm 0.0023$ & $+0.0149 \pm 0.0030$ \\
+C-multistep       & $+0.0146 \pm 0.0017$ & $+0.0137 \pm 0.0013$ \\
+A (no head)       & $+0.0157 \pm 0.0017$ & $+0.0145 \pm 0.0014$ \\
+B-shuffled        & $+0.0177 \pm 0.0017$ & $+0.0160 \pm 0.0017$ \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-Lower is better: the slope is how fast regret grows as the physics is shifted
-away from training. Two things follow, and the second is the interesting one.
+Lower is better: the slope is how fast regret grows as physics is shifted away
+from training. \textbf{Against A, every arm's CIs overlap at every tag and at
+both scales.} Under the falsification rule frozen before any arm ran, the
+verdict is \textbf{effect absent}: adding a next-state prediction head does not
+measurably change robustness to changed dynamics on this task.
 
-\textbf{(1) Adding a prediction head does not measurably help.} Every B
-variant, and C, overlaps A. Under the falsification rule frozen before any
-arm ran, the verdict at this scale is \textbf{effect absent}, and that is
-what we report. All three B variants land below A by $\sim$12--17\%, so the
-direction is consistent, but the intervals do not separate.
+\textbf{The one separation does not replicate.} At $10^3$ the tightest control
+in the design --- B against B-shuffled, identical architecture, parameter
+count, loss form and auxiliary gradient, differing only in whether the
+prediction target is the true next state or another episode's --- separated
+cleanly on both the ``all'' and composition tags ($+0.0131\pm0.0012$ vs
+$+0.0177\pm0.0017$). At $10^4$ it is gone: every B-vs-B-shuffled contrast
+overlaps. We report it as a single-scale finding that failed to replicate at
+the next scale, not as an effect.
 
-\textbf{(2) Predicting the \emph{right} next state beats predicting a wrong
-one, and this does separate.} B-shuffled is the tightest control in the
-design: identical architecture, parameter count, loss form and optimizer, and
-the same auxiliary gradient magnitude --- the only difference is that its
-prediction target comes from a different episode. Against it:
-
-\begin{center}
-\begin{tabular}{@{}llll@{}}
-\toprule
-\textbf{Contrast} & \textbf{all} & \textbf{composition} & \textbf{Verdict} \\
-\midrule
-B-multistep vs B-shuffled & $0.0131$ vs $0.0177$ & $0.0015$ vs $0.0056$ & \textbf{CIs SEPARATED} \\
-B-onestep vs B-shuffled & $0.0131$ vs $0.0177$ & $0.0011$ vs $0.0056$ & \textbf{CIs SEPARATED} \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-So the auxiliary loss is not inert: pointed at the true next state it makes
-the policy more robust than pointing it at a false one, separably so, and on
-the composition tag as well as overall. B-shuffled is also the \emph{worst}
-arm in the table --- a wrong dynamics target is actively harmful relative to
-no target at all. The ordering B $<$ B-latent $<$ C $<$ A $<$ B-shuffled is
-what the hypothesis predicts; what is missing at this data scale is the
-A-to-B step clearing the noise floor. That is precisely what the $10^4$ and
-$10^5$ tiers are for: if the effect is real, its margin over A should grow
-with data. Those evaluations are running.
+What survives is a consistent \emph{ordering} at both scales --- B-onestep
+$<$ B-multistep $<$ B-latent $\approx$ C $<$ A $<$ B-shuffled --- whose gaps
+shrink as data grows (A minus B-multistep: $0.0026$ at $10^3$, $0.0008$ at
+$10^4$). That is the signature of a mild inductive bias, not a mechanism:
+worth something when demonstrations are scarce, washing out as they are not.
+The honest reading today is that a prediction head buys no robustness here,
+and a \emph{wrong} prediction target may cost a little. The $10^5$ tier
+(dataset generating, then 60 arms) is the last scale we will add; if the gaps
+keep shrinking, that is the answer.
 
 \begin{figure}[h]
 \centering
@@ -424,12 +412,20 @@ with data. Those evaluations are running.
 \caption{T3 at $10^3$, all six arms, 10 seeds each. Left: success under
 increasing physics shift $\delta$. Right: per-seed degradation slopes, mean
 $\pm$ 95\% t-CI (interpolation omitted: too few grid points for a stable
-per-seed fit). On the ``all'' tag the two B point-prediction arms sit clearly
-below B-shuffled (orange) with separated intervals, while A (black) sits
-between them and overlaps everything.}
+per-seed fit). The B point-prediction arms sit below B-shuffled (orange) with
+separated intervals at this scale --- a separation that disappears at $10^4$
+(Figure~\ref{fig:t3result4}).}
 \label{fig:t3result}
 \end{figure}
 
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.98\textwidth]{figs/t3_1e4_result.png}
+\caption{The same comparison at $10^4$ demonstrations. The ordering survives
+but every interval overlaps: ten times the data does not turn the direction
+into an effect.}
+\label{fig:t3result4}
+\end{figure}
 
 \section{T8 ``stack-and-carry'': a second task that pays \hfill gate passing}
 Task proposed by the user: stack objects of different shape and carry the

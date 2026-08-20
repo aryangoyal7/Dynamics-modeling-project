@@ -1,0 +1,70 @@
+=== 1e3: A vs B-onestep ===
+== degradation slopes (success regret vs delta), 10 vs 10 seeds ==
+  interpolation  A: -0.1273 ± 0.1900   B-onestep: -0.1352 ± 0.1542   CIs OVERLAP -> effect absent under the preregistered rule
+  extrapolation  A: -0.0212 ± 0.0088   B-onestep: -0.0139 ± 0.0113   CIs OVERLAP -> effect absent under the preregistered rule
+  composition    A: +0.0028 ± 0.0024   B-onestep: +0.0011 ± 0.0008   CIs OVERLAP -> effect absent under the preregistered rule
+  all            A: +0.0157 ± 0.0017   B-onestep: +0.0131 ± 0.0012   CIs OVERLAP -> effect absent under the preregistered rule
+
+=== 1e3: A vs B-multistep ===
+== degradation slopes (success regret vs delta), 10 vs 10 seeds ==
+  interpolation  A: -0.1273 ± 0.1900   B-multistep: -0.0795 ± 0.1897   CIs OVERLAP -> effect absent under the preregistered rule
+  extrapolation  A: -0.0212 ± 0.0088   B-multistep: -0.0200 ± 0.0099   CIs OVERLAP -> effect absent under the preregistered rule
+  composition    A: +0.0028 ± 0.0024   B-multistep: +0.0015 ± 0.0019   CIs OVERLAP -> effect absent under the preregistered rule
+  all            A: +0.0157 ± 0.0017   B-multistep: +0.0131 ± 0.0019   CIs OVERLAP -> effect absent under the preregistered rule
+
+=== 1e3: A vs B-latent ===
+== degradation slopes (success regret vs delta), 10 vs 10 seeds ==
+  interpolation  A: -0.1273 ± 0.1900   B-latent: -0.1432 ± 0.1308   CIs OVERLAP -> effect absent under the preregistered rule
+  extrapolation  A: -0.0212 ± 0.0088   B-latent: -0.0295 ± 0.0130   CIs OVERLAP -> effect absent under the preregistered rule
+  composition    A: +0.0028 ± 0.0024   B-latent: +0.0023 ± 0.0009   CIs OVERLAP -> effect absent under the preregistered rule
+  all            A: +0.0157 ± 0.0017   B-latent: +0.0139 ± 0.0023   CIs OVERLAP -> effect absent under the preregistered rule
+
+=== 1e3: A vs Bshuf-multistep ===
+== degradation slopes (success regret vs delta), 10 vs 10 seeds ==
+  interpolation  A: -0.1273 ± 0.1900   Bshuf-multistep: -0.1670 ± 0.1942   CIs OVERLAP -> effect absent under the preregistered rule
+  extrapolation  A: -0.0212 ± 0.0088   Bshuf-multistep: -0.0188 ± 0.0110   CIs OVERLAP -> effect absent under the preregistered rule
+  composition    A: +0.0028 ± 0.0024   Bshuf-multistep: +0.0056 ± 0.0020   CIs OVERLAP -> effect absent under the preregistered rule
+  all            A: +0.0157 ± 0.0017   Bshuf-multistep: +0.0177 ± 0.0017   CIs OVERLAP -> effect absent under the preregistered rule
+
+=== 1e3: A vs C-multistep ===
+== degradation slopes (success regret vs delta), 10 vs 10 seeds ==
+  interpolation  A: -0.1273 ± 0.1900   C-multistep: -0.0795 ± 0.1631   CIs OVERLAP -> effect absent under the preregistered rule
+  extrapolation  A: -0.0212 ± 0.0088   C-multistep: -0.0191 ± 0.0096   CIs OVERLAP -> effect absent under the preregistered rule
+  composition    A: +0.0028 ± 0.0024   C-multistep: +0.0013 ± 0.0027   CIs OVERLAP -> effect absent under the preregistered rule
+  all            A: +0.0157 ± 0.0017   C-multistep: +0.0146 ± 0.0017   CIs OVERLAP -> effect absent under the preregistered rule
+
+=== 1e4: A vs B-onestep ===
+== degradation slopes (success regret vs delta), 10 vs 10 seeds ==
+  interpolation  A: -0.0239 ± 0.1610   B-onestep: +0.0318 ± 0.1679   CIs OVERLAP -> effect absent under the preregistered rule
+  extrapolation  A: -0.0276 ± 0.0124   B-onestep: -0.0200 ± 0.0153   CIs OVERLAP -> effect absent under the preregistered rule
+  composition    A: +0.0015 ± 0.0014   B-onestep: +0.0025 ± 0.0025   CIs OVERLAP -> effect absent under the preregistered rule
+  all            A: +0.0145 ± 0.0014   B-onestep: +0.0128 ± 0.0025   CIs OVERLAP -> effect absent under the preregistered rule
+
+=== 1e4: A vs B-multistep ===
+== degradation slopes (success regret vs delta), 10 vs 10 seeds ==
+  interpolation  A: -0.0239 ± 0.1610   B-multistep: -0.0318 ± 0.1993   CIs OVERLAP -> effect absent under the preregistered rule
+  extrapolation  A: -0.0276 ± 0.0124   B-multistep: -0.0306 ± 0.0125   CIs OVERLAP -> effect absent under the preregistered rule
+  composition    A: +0.0015 ± 0.0014   B-multistep: +0.0022 ± 0.0026   CIs OVERLAP -> effect absent under the preregistered rule
+  all            A: +0.0145 ± 0.0014   B-multistep: +0.0137 ± 0.0030   CIs OVERLAP -> effect absent under the preregistered rule
+
+=== 1e4: A vs B-latent ===
+== degradation slopes (success regret vs delta), 10 vs 10 seeds ==
+  interpolation  A: -0.0239 ± 0.1610   B-latent: -0.0557 ± 0.2130   CIs OVERLAP -> effect absent under the preregistered rule
+  extrapolation  A: -0.0276 ± 0.0124   B-latent: -0.0147 ± 0.0083   CIs OVERLAP -> effect absent under the preregistered rule
+  composition    A: +0.0015 ± 0.0014   B-latent: +0.0031 ± 0.0026   CIs OVERLAP -> effect absent under the preregistered rule
+  all            A: +0.0145 ± 0.0014   B-latent: +0.0149 ± 0.0030   CIs OVERLAP -> effect absent under the preregistered rule
+
+=== 1e4: A vs Bshuf-multistep ===
+== degradation slopes (success regret vs delta), 10 vs 10 seeds ==
+  interpolation  A: -0.0239 ± 0.1610   Bshuf-multistep: -0.1432 ± 0.1649   CIs OVERLAP -> effect absent under the preregistered rule
+  extrapolation  A: -0.0276 ± 0.0124   Bshuf-multistep: -0.0201 ± 0.0129   CIs OVERLAP -> effect absent under the preregistered rule
+  composition    A: +0.0015 ± 0.0014   Bshuf-multistep: +0.0043 ± 0.0024   CIs OVERLAP -> effect absent under the preregistered rule
+  all            A: +0.0145 ± 0.0014   Bshuf-multistep: +0.0160 ± 0.0017   CIs OVERLAP -> effect absent under the preregistered rule
+
+=== 1e4: A vs C-multistep ===
+== degradation slopes (success regret vs delta), 10 vs 10 seeds ==
+  interpolation  A: -0.0239 ± 0.1610   C-multistep: -0.1193 ± 0.1659   CIs OVERLAP -> effect absent under the preregistered rule
+  extrapolation  A: -0.0276 ± 0.0124   C-multistep: -0.0316 ± 0.0072   CIs OVERLAP -> effect absent under the preregistered rule
+  composition    A: +0.0015 ± 0.0014   C-multistep: +0.0022 ± 0.0019   CIs OVERLAP -> effect absent under the preregistered rule
+  all            A: +0.0145 ± 0.0014   C-multistep: +0.0137 ± 0.0013   CIs OVERLAP -> effect absent under the preregistered rule
+
