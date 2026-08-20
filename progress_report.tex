@@ -306,7 +306,7 @@ T5 cliff toss & (built, then dropped by decision) & one-shot force $\ne$ dynamic
 T6 Push-T, loose tolerance & $-2.0$ to $-3.7 \pm 6.2$ & feedback substitutes for knowledge \\
 T6 Push-T, precision, high power & $-0.2$ to $+0.6 \pm 3.1$; 94 vs 90.5 steps & \fail{} --- confirmed zero (2{,}048 eps/side) \\
 T8 stack-and-carry, speed lever & structurally $0$ (see Section~12) & \fail{} --- monotone choice, $c$-independent floor \\
-T8 stack-and-carry, balance & $+12.7 \pm 6.2$ (82.4 vs 69.7\%) & \pass{} --- second live task \\
+T8 stack-and-carry & $+0.6 \pm 6.2$ at the teachable budget & \fail{} --- premium and teachability exclude each other \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -427,67 +427,82 @@ into an effect.}
 \label{fig:t3result4}
 \end{figure}
 
-\section{T8 ``stack-and-carry'': a second task that pays \hfill gate passing}
+\section{T8 ``stack-and-carry'': the premium and the teacher exclude each
+other \hfill descoped}
 Task proposed by the user: stack objects of different shape and carry the
-stack somewhere else. As stated it would have failed the gate the way T2 did
-(a slow careful carry succeeds under every physics), so it was built in the
-regime where the two design laws say a premium can exist. A tall block
-($6\times6\times10$\,cm) whose centre of mass is hidden and offset by up to
-$\pm1.2$\,cm must be placed on a narrow beam ($12\times3.6\times2.4$\,cm),
-which is then grasped at its free end and carried 34\,cm inside a 140-step
-budget. The block stands only while its hidden mass stays inside a band
-around the beam's centre line, and the placement is committed the instant the
-gripper opens.
+stack somewhere else. Built in the balance regime --- a tall block
+($6\times6\times10$\,cm) with a hidden, offset centre of mass must be placed
+on a narrow beam ($12\times3.6\times2.4$\,cm), which is then grasped at its
+free end and carried 34\,cm inside a step budget --- so that the placement is
+committed the instant the gripper opens. Eleven measured iterations later it
+is descoped, and the reason is worth more than the task would have been.
 
-\textbf{Gate: aware $0.824$ vs blind $0.697$, premium $+12.7 \pm 6.2$
-points} at 512 episodes per arm --- healthy success far above the $0.55$ bar
-and an interval, $[+6.5, +19.0]$, that excludes zero. Smaller than T3's
-$+16.7$ but unambiguously real, and it survived the honest version of the
-comparison: the blind arm was given its own calibrated speed \emph{and}
-lateral bias over the same grid the aware arm searched (a fixed bias of
-$+0.5$\,cm, worth $0.697$; the naive centred placement scores only $0.50$,
-and quoting that as the baseline would have inflated the premium to
-$+32$). Three iterations, each leaving a measured law behind:
+An early gate read $+12.7\pm6.2$. That number was wrong, and the way it was
+wrong is the finding: it came from a controller family whose slowest carry
+speed was $0.4$ --- a bound imposed by \emph{our candidate grid}, not by the
+task. Given the full family, the $c$-blind controller simply carries slowly,
+a calm carry makes placement irrelevant, and the premium is
+$\mathbf{+0.006\pm0.062}$: zero. T8's own design law (i) caught T8's own gate.
 
-\begin{enumerate}[leftmargin=1.6em,itemsep=0.15em]
-\item \textbf{A monotone choice against a $c$-independent floor can never
-pay.} The first build made the carry \emph{speed} the knowledge-bearing
-choice. The probe found a real physics cliff --- at friction $0.33$ the block
-sheared off above speed $0.5$, at $0.68$ even $0.9$ survived --- and the
-premium is still provably zero: the slip threshold $s_{\text{safe}}(c)$ moves
-with $c$ but the deadline floor $s_{\min}$ does not, and slower is always
-safer, so a blind controller parks at $s_{\min}$ --- the same corner an
-omniscient one would pick --- and succeeds on exactly the same episodes.
-This sharpens law~(1): both failure directions must cost \emph{and} both
-thresholds must move with $c$, which is exactly why T3's flick pays.
-\item \textbf{The informed arm must be calibrated, not derived.} Rebuilt in
-the balance regime, the ``obvious'' aware controller --- shift the block by
-$-$COM so its mass sits on the beam centre line --- measured $0.28$ against
-blind's $0.47$. A swept placement (Figure~\ref{fig:t8mech}) shows why:
-success peaks when the mass sits $+1.0$ to $+1.5$\,cm toward the goal, not at
-zero, because the carry's opening acceleration throws the block the other
-way. An analytically correct aware controller made a good task read as a
-failed gate --- the same lesson as T3's calibrated flick table, and a trap
-worth stating in the paper.
-\item With both arms calibrated over the same grid --- aware gets a
-per-bucket (speed, bias) plus the COM correction, blind gets one calibrated
-pair, which is the best a $c$-blind controller can do since the COM angle is
-uniform --- the premium is $+12.7 \pm 6.2$. Every one of the 20 calibrated
-cells chose the same carry speed, independently confirming law~(i): the speed
-lever is inert, and the entire premium comes from the committed placement.
-\end{enumerate}
+A budget sweep then mapped the entire trade-off, giving both arms their best
+settings over one grid:
+
+\begin{center}
+\begin{tabular}{@{}lllll@{}}
+\toprule
+\textbf{Step budget} & \textbf{aware} & \textbf{blind} & \textbf{premium} & \textbf{teacher spread} \\
+\midrule
+100--110 & 0.000 & 0.000 & --- (nothing finishes) & --- \\
+120 & 0.926 & 0.805 & $+0.121$ \pass{} & 0.184 \fail{} \\
+140 & 0.980 & 0.975 & $+0.006$ \fail{} & 0.062 \pass{} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Neither column can be occupied twice. Narrowing mass to $\le$1.1 at budget
+120 kept the premium and left spread 0.184; narrowing to $\le$0.95 moved the
+bottleneck to the friction axis (0.111) --- at the disturbance a premium
+needs, \emph{every} axis is variable. Enlarging the hidden COM instead of the
+motion (0.4\,$\to$\,0.6 of half-width) was the right instinct and did buy a
+gap at a calm carry (0.930 vs 0.852), but certification still failed (0.135)
+and geometry caps the trick: full compensation requires the block to keep
+covering the beam, bounding the offset at 1.2\,cm, so a 1.8\,cm offset leaves
+even the informed placement precarious. Lightening the block cured the tilt
+and erased the premium outright (1.00 vs 1.00); narrowing the beam restored
+difficulty but not the advantage.
+
+The bar is not at fault: T8's teacher certified at spread \textbf{0.062},
+\emph{better} than T3's certified 0.072 --- but only in the calm regime where
+knowledge is worth nothing. The structural cause is specific and general.
+Carrying a stack by one end is a \textbf{cantilever}: the load torques the
+beam inside the gripper, and the beam's tilt during the carry rises from
+$2.7^\circ$ at mass 0.7 to $8.6^\circ$ at mass 1.2, tilting the block's own
+support surface by more than any placement can answer. The disturbance that
+makes placement decisive is the same disturbance that makes outcomes vary
+across the physics range.
+
+\textbf{The principle}, and the sharpest this study has produced: a task
+prices physics knowledge only where the correct action varies with $c$ in
+\emph{direction} and the wrong one cannot be undone --- and it is buildable
+only if that same regime is executable across the whole physics range. Where
+premium and teachability are anti-correlated, the task has no valid operating
+point at all. T3 has one because its flick is committed at a single instant:
+the difficulty comes from the commitment, not from sustained disturbance.
+Cost of this negative result: zero datasets and zero training runs. Every
+gate stopped the spend before it happened.
 
 \begin{figure}[h]
 \centering
 \includegraphics[width=0.98\textwidth]{figs/t8_mechanism.png}
 \caption{T8's premium mechanism, measured with the block teleported onto the
-beam (no placement noise) and only the carry run, 64 episodes per point.
-Left: where the block should be \emph{seated} depends on its hidden mass ---
-the two curves are displaced by $1.05$\,cm, exactly the hidden COM offset.
-Right: plotted against where its \emph{mass} ends up, they collapse. Knowing
-$c$ is worth precisely that displacement.}
+beam and only the carry run. Left: where the block should be \emph{seated}
+depends on its hidden mass --- the curves are displaced by exactly the
+$1.05$\,cm COM offset. Right: against where its \emph{mass} ends up they
+collapse. The mechanism is real; what fails is being able to teach it evenly
+at the disturbance it requires.}
 \label{fig:t8mech}
 \end{figure}
+
 
 \section{Measurement tools, validated the hard way}
 Probes (small readouts measuring how much physics knowledge a policy's internals

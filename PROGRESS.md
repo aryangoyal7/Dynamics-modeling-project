@@ -103,13 +103,70 @@ Four more rounds, each driven by a measurement rather than a guess:
 0.944] — the knowledge-bearing axis is the *evenest* one, which is exactly
 what a c-aware teacher should look like.
 
-This left a general lesson worth stating in the paper: **teacher evenness and
-knowledge premium pull in opposite directions along the disturbance axis.**
-Make the task calm enough to teach everywhere and knowledge stops paying;
-make it violent enough to pay and some corner of the physics becomes
-unteachable. The window is found by narrowing the training *range*, not by
-softening the *task*. The premium gate is being re-measured on the final
-configuration, since the ranges changed.
+This left a general lesson: **teacher evenness and knowledge premium pull in
+opposite directions along the disturbance axis.** The premium gate was
+re-measured on the final configuration, and that lesson turned out to be the
+task's verdict.
+
+### ❌ T8 DESCOPED — no operating point where both requirements hold
+
+**The re-measured premium was +0.006 ± 0.062 — zero.** The c-blind controller
+escaped by carrying SLOWLY: given the 140-step budget it chose the grid's
+slowest speed and scored 0.975, and a calm carry makes placement irrelevant.
+This also retroactively explains the earlier +12.7: that was measured on a
+controller family whose slowest option was 0.4 — a restriction imposed by
+**my grid bounds, not by the task**. Given the full family the advantage
+vanishes. T8's own design law (i) caught its own gate.
+
+A budget sweep (`reports/t8_deadline_probe.json`, both arms given their best
+settings over the same grid) then mapped the whole trade-off:
+
+| budget | aware | blind | premium | teacher spread |
+|---|---|---|---|---|
+| 100–110 | 0.000 | 0.000 | — (nothing finishes) | — |
+| **120** | 0.926 | 0.805 | **+0.121** ✅ | **0.184** ❌ |
+| 140 | 0.980 | 0.975 | **+0.006** ❌ | **0.062** ✅ |
+
+Every attempt to occupy both columns failed, each for a measured reason:
+
+- **mass ≤ 1.1 at budget 120** → premium holds, spread 0.184 (mass axis).
+- **mass ≤ 0.95 at budget 120** → spread 0.111; the bottleneck simply moved
+  to the friction axis. At the disturbance a premium needs, *every* axis is
+  variable.
+- **bigger hidden COM (0.4 → 0.6) at the calm budget 140** — the right idea,
+  making the *hidden parameter* decisive instead of the motion violent:
+  aware 0.930 vs blind 0.852 at matched settings. But certification still
+  failed (spread 0.135), and geometry caps the trick: full compensation needs
+  the block to keep covering the beam, which bounds the offset at 1.2 cm, so
+  a 1.8 cm offset leaves even the *aware* placement precarious.
+- **lighter block** cured the gripper tilt and erased the premium entirely
+  (aware 1.00 vs blind 1.00). **Narrower beam** restored difficulty but not
+  the advantage (blind ≥ aware).
+
+**Verdict.** T8 can clear either bar but not both. The bar is not the problem
+— T8's teacher certified at spread **0.062**, better than T3's certified
+0.072 — it simply certified only in the calm regime where knowledge is worth
+nothing. The structural reason is specific and general: carrying a stack by
+one end is a **cantilever**, so heavier loads tilt the beam inside the gripper
+(measured 2.7° → 8.6° from mass 0.7 to 1.2), tilting the block's own support
+surface by more than any placement can answer. The disturbance that makes
+placement decisive is the same disturbance that makes outcomes vary across
+the physics range, and no calibration flattens that.
+
+**The design principle this yields**, the sharpest the project has produced:
+*a task prices physics knowledge only where the correct action varies with c
+in DIRECTION and the wrong one cannot be undone — and it is buildable only if
+that regime is also executable across the whole physics range. Where the
+knowledge premium and teacher evenness are anti-correlated, the task is not
+merely hard to build; it has no valid operating point.* T3 has one because
+its flick is committed at a single instant, so difficulty comes from the
+commitment rather than from sustained disturbance.
+
+Everything built for T8 stays in the repo and is reusable: the two-object
+env, the certified-teacher machinery, the `OBS_LAYOUTS` registry, the
+`--layout`/`--horizon` plumbing, the delta-grid re-tagging fix, and the gated
+`t8_chain.py`. Cost of the negative result: no datasets, no training runs —
+every gate stopped the spend before it happened.
 
 Three earlier iterations, each producing a measured law:
 

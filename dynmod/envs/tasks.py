@@ -1265,7 +1265,7 @@ class StackCarryT8Env(DynBaseEnv):
     # restored difficulty without restoring the advantage. The delta grid
     # still probes far outside these ranges, and evaluate.py re-tags
     # interpolation/extrapolation from this spec.
-    C_SPEC_KW = dict(com_frac_max=0.4, mass_mult_range=(0.7, 1.1),
+    C_SPEC_KW = dict(com_frac_max=0.6, mass_mult_range=(0.7, 1.1),
                      friction_range=(0.35, 0.7))
 
     def _build_task(self, options: dict):

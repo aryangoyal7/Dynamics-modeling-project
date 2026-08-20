@@ -146,12 +146,16 @@ def fig_t8_mechanism():
 
 def fig_gate_premiums():
     """Knowledge-premium gate verdict for every task designed so far."""
-    t8 = (17.2, 12.5)  # fallback: 64-episode read, until the full gate lands
-    if os.path.exists(f"{REPORTS}/premium_gate_t8.json"):
-        r = json.load(open(f"{REPORTS}/premium_gate_t8.json"))["result"]
+    # T8's final verdict is the gate at the budget where its teacher can be
+    # certified; at the tighter budget the premium exists but the teacher
+    # cannot (see reports/t8_deadline_probe.json)
+    t8 = (0.6, 6.2)
+    f8 = f"{REPORTS}/premium_gate_t8_com04_budget140.json"
+    if os.path.exists(f8):
+        r = json.load(open(f8))["result"]
         t8 = (100 * r["premium"], 100 * r["ci95"])
     rows = [  # (label, premium %, ci %, passed)
-        ("T8 stack-and-carry\n(commit at release)", t8[0], t8[1], True),
+        ("T8 stack-and-carry\n(teachable budget)", t8[0], t8[1], False),
         ("T3 slide-to-slot\n(commit at launch)", 16.7, 3.6, True),
         ("T1 dump-pour", -4.9, 6.3, False),
         ("T1 measured-pour", 2.7, 6.2, False),

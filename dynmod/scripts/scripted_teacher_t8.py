@@ -153,7 +153,7 @@ def run_calibrate(args):
 
 
 def run_flatness(args):
-    COM = np.array([0.0, 0.2, 0.4])
+    COM = np.array([0.0, 0.3, 0.6])
     points = [dict(mass_mult=m, friction=f, com_frac=o)
               for m, f, o in itertools.product(MASS, FRICTION, COM)]
     R = args.replicas  # independent hidden COM angles per point - see run_calibrate
