@@ -1074,19 +1074,25 @@ class RouteChoiceT7Env(SlideToSlotT3Env):
 
     CH_OFF = 0.095          # channel center offsets: +y = slick, -y = grippy
     CH_HALF = 0.06          # channel inner half-width (hand must fit: T3 uses 0.06)
-    CH_X = (-0.05, 0.50)    # floored channel span
-    DIV_X = (-0.16, 0.50)   # divider extends back: walled approach lanes, so
+    # v6c: the whole layout moved +10 cm in x. Probe v6b showed the arm
+    # topping out around x=-0.27, so with the staging area at -0.26 it could
+    # neither get behind the block to push it nor reach the windup position -
+    # blocks crept a few cm and the flick never fired. Everything downstream
+    # of the staging area is unchanged in shape; it just sits where the arm
+    # can work.
+    CH_X = (0.05, 0.60)     # floored channel span
+    DIV_X = (-0.06, 0.60)   # divider extends back: walled approach lanes, so
                             # the windup happens confined (v2 probe: open-area
                             # windups scatter launches over a 15-20 cm IQR)
-    STAGE_X = -0.26
+    STAGE_X = -0.16
     # v1 probe: 0.9 stopped every block within 3 cm of the mouth regardless
     # of c - a universal safe route. 0.35 keeps the right channel braking
     # harder than the slick left while letting c decide the stop point.
     GRIPPY_FRICTION = 0.35
     # per-channel slot centers, set from the stopping-distribution probe
-    SLOT_L_X = 0.11
-    SLOT_R_X = 0.05
-    spawn_x_range = (-0.24, -0.20)  # behind the lanes, in the crossing zone
+    SLOT_L_X = 0.21
+    SLOT_R_X = 0.15
+    spawn_x_range = (-0.14, -0.10)  # behind the lanes, in the crossing zone
 
     def _build_task(self, options: dict):
         self.obj = build_randomized_box(

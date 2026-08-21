@@ -30,16 +30,16 @@ FRICTION_B = [0.33, 0.5, 0.68]
 FLICK_SPEED = 1.0   # below ~0.85 the block never detaches from the hand
                     # (measured: stop-and-go to a fixed point at every c) -
                     # the same threshold T3's calibration found
-FLICK_STANDOFF = 0.19
-CROSS_X = -0.20   # side-crossing happens here, behind the walled lanes
-MOUTH_X = -0.10   # lane mouth
+FLICK_STANDOFF = 0.15  # v6c: shorter run-up, now comfortably in reach
+CROSS_X = -0.10   # side-crossing happens here, behind the walled lanes
+MOUTH_X = 0.00    # lane mouth
 # v6b: the flick standoff must be REACHABLE. The trace showed the hand
 # parking at x=-0.274 while trying to reach obj_x - 0.19 = -0.411: with the
 # block still at its spawn (-0.221) the windup position is outside the arm's
 # workspace, so `ready` stayed true for 260 steps and no strike ever fired.
 # Creep the block forward onto the last of the plain table first; from
 # PUSH_TO_X the windup sits at -0.27, which the trace shows the arm holds.
-PUSH_TO_X = -0.08
+PUSH_TO_X = 0.02
 CREEP_SPEED = 0.2  # gentle: the approach runs on high-friction table, so the
                    # block stops quickly and settles in a repeatable place
 PUSH_Z = 0.015

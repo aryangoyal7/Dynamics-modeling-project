@@ -1,5 +1,94 @@
 # Project Progress
 
+## 🔬 2026-08-21: the null is UNDERPOWERED, not empty (main-result correction)
+
+The preregistered rule -- "overlapping 95% t-intervals = effect absent" --
+is far more conservative than it looks: it rejects only at roughly p<0.005.
+Reporting it alone would claim a null that was never tested. New module
+`dynmod/analysis/power.py` runs the tests the claim actually needs (Welch,
+paired-by-seed, TOST equivalence, and the minimum detectable effect).
+
+Pooled over the grid, A vs each arm:
+
+| comparison | 1e3 diff | Welch p | paired p | 1e4 Welch p |
+|---|---|---|---|---|
+| B-onestep   | -0.0026 | **0.013** | **0.042** | 0.197 |
+| B-multistep | -0.0026 | **0.036** | **0.034** | 0.580 |
+| B-latent    | -0.0018 | 0.167 | 0.200 | 0.796 |
+| B-shuffled  | +0.0019 | 0.090 | 0.101 | 0.129 |
+| C           | -0.0012 | 0.294 | 0.195 | 0.356 |
+
+Two of three heads beat the baseline at 1e3 in the hypothesised direction.
+It does not stand up: 30 tests expect ~1.5 false positives and Bonferroni
+(alpha 0.0017) kills all of them; nothing replicates at 1e4; and the
+SHUFFLED null control itself separates at 1e4 composition (p=0.034), which
+is the signature of noise rather than signal.
+
+**The number that matters: 10 seeds resolve only differences >= 0.0030, and
+the observed gaps are 0.0008-0.0026 -- below our own resolution.** TOST
+equivalence also fails, so "negligible" is not supportable either. The
+defensible claim is a BOUND, not an absence: any robustness benefit is
+under 0.003 slope units, about one success point across the tested shift
+range (delta 0.39-9.0), two at the extreme.
+
+**Action (user go-ahead):** seeds 10-19 at 1e3 and 1e4 -> 20 seeds/arm, the
+n needed to confirm or kill the 1e3 signal. `restore_and_extend.sh`, GPUs
+0/2/3/4. Note it restores `policy_runs` FIRST: the fifth wipe emptied it,
+and launch_main_arms skips only on `final_ckpt.pt`, so any launcher (the
+1e5 chain included) would otherwise have retrained all 120 finished arms.
+
+## 🚧 2026-08-21: T7 restarted, T8-v2 tried and failed
+
+**T8-v2 (discrete grasp-end): FAILED its probe, twice.** v1 died on the
+premium/teachability anti-correlation, so v2 borrowed T7's structure and
+made the knowledge DISCRETE -- block seated at the beam's centre so it
+physically blocks the safe middle grasp, hidden COM along the beam decides
+which END to grasp. `StackGraspT8-v2` + `t8v2_grasp_probe.py`.
+
+  probe 1: grasp +x wins at every com_x (gap 0.19 at -0.6, 0.88 at +0.6).
+           Hypothesis: the beam sat at x=-0.10, so the +x end was 9 cm
+           closer to the arm base -- a KINEMATIC safe corner, design law 3
+           reappearing through the robot instead of the task.
+  probe 2: geometry symmetrised on x=0. Winner STILL never reverses, and
+           nominal success is only ~0.5, so the controller is not clean
+           enough for this to be a fair test in either direction.
+
+**T8 stays descoped.** Cost: two probes, zero datasets, zero training runs.
+Not shaving it further -- forcing a task through by parameter-tweaking is
+exactly the failure mode the gates exist to prevent.
+
+**T7 "Router": the launch-repeatability blocker is half solved.** v6 added
+settle-then-strike (fire only at a block centred to 12 mm and at rest).
+
+  v6  -- removed the approach push by mistake; blocks never left spawn.
+  v6a -- struck from the staging area; still no launch.
+  v6b -- a flag trace found the real cause: the windup sits at obj_x-0.19 =
+         -0.41 while the arm tops out near -0.27, so `ready` stayed true for
+         260 steps with no strike possible. Added a gentle creep on the
+         high-friction table. RESULT: stop-x IQR fell from 10-20 cm to
+         **3-5 cm at friction 0.5 and 0.68** -- the slot tolerance -- but
+         the creep itself is reach-limited and stalls near x=-0.11.
+  v6c -- whole layout shifted +10 cm into the workspace (staging -0.16,
+         channels 0.05-0.60, slots 0.21/0.15, standoff 0.15). Re-probing.
+
+Lesson worth keeping: three of these iterations were robot-workspace
+limits, not task physics. Check reach BEFORE redesigning a task.
+
+## 💥 Fifth machine wipe (2026-08-21 09:46)
+
+Scratch wiped again mid-run; the 1e5 dataset died at ~cycle 140/400. Zero
+permanent loss (datasets and checkpoints were in `scratch_backup/`), env
+rebuilt in ~6 min, generation restarted 09:58 and is healthy (teacher
+success 0.636 vs the certified 0.639). `resume_after_rebuild.sh` now chains
+rebuild -> 1e5 generation -> supervisor automatically.
+
+**The Azure auto-stop schedule is STILL enabled and I cannot disable it:**
+no managed identity, `az login` unauthenticated, and the compute instance's
+own token endpoint returns an SSO failure. It needs a human in
+ml.azure.com -> Compute -> garyan181: turn off BOTH idle shutdown and any
+start/stop schedule. Instance `garyan181`, workspace `centum1`, RG
+`garyan18-rg`, region italynorth.
+
 ## ▶️ RESUMED 2026-08-19 + T8 stack-and-carry built and gated
 
 Machine returned; environment rebuilt in 6 min from `rebuild_env.sh`, 7.8 GB
