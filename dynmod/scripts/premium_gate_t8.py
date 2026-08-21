@@ -79,11 +79,16 @@ class StackCarryController:
     HOLD_TOP = (2, 5)   # gripper closed on the block
     HOLD_BEAM = (10, 13)
 
-    def __init__(self, base, act_dim, speeds, place_comp):
+    def __init__(self, base, act_dim, speeds, place_comp, grasp_dx=None):
         self.base, self.act_dim = base, act_dim
         self.n, self.dev = base.num_envs, base.device
         self.speeds = speeds
         self.place_comp = place_comp
+        # per-env grasp offset along the beam: T8-v2 makes WHICH END the
+        # knowledge-bearing choice, so it varies per episode. Defaults to the
+        # v1 fixed end, leaving v1 behaviour byte-identical.
+        self.grasp_dx = (torch.full((self.n,), base.GRASP_DX, device=self.dev)
+                         if grasp_dx is None else grasp_dx)
         self.stage = torch.zeros(self.n, dtype=torch.long, device=self.dev)
         self.dwell = torch.zeros(self.n, dtype=torch.long, device=self.dev)
 
@@ -105,8 +110,10 @@ class StackCarryController:
 
         seat = beam[:, :2] + torch.tensor(
             [base.TOP_SEAT_DX, 0.0], device=dev) + self.place_comp
-        grip_xy = beam[:, :2] + torch.tensor([base.GRASP_DX, 0.0], device=dev)
-        carry_xy = goal[None] + torch.tensor([base.GRASP_DX, 0.0], device=dev)
+        gdx = self.grasp_dx
+        g_off = torch.stack([gdx, torch.zeros_like(gdx)], dim=1)
+        grip_xy = beam[:, :2] + g_off
+        carry_xy = goal[None] + g_off
 
         above_block = col(block[:, :2], HOVER_Z)
         at_block = col(block[:, :2], TOP_GRASP_Z)
@@ -115,8 +122,8 @@ class StackCarryController:
         above_grip = col(grip_xy, CLEAR_Z)
         at_grip = col(grip_xy, BEAM_GRASP_Z)
         lift = col(grip_xy, CARRY_Z)
-        carry = col(carry_xy.expand(n, 2), CARRY_Z)
-        down = col(carry_xy.expand(n, 2), PLACE_DOWN_Z)
+        carry = col(carry_xy, CARRY_Z)
+        down = col(carry_xy, PLACE_DOWN_Z)
         retreat = col(tcp[:, :2], HOVER_Z)
 
         targets = [above_block, at_block, at_block, above_block,   # 0-3

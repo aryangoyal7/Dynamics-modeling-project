@@ -1389,6 +1389,80 @@ CliffTossT5TeacherEnv = register_env("CliffTossT5Teacher-v1", max_episode_steps=
 DynPushT6TeacherEnv = register_env("DynPushT6Teacher-v1", max_episode_steps=150)(
     _teacher(DynPushT6Env)
 )
+@register_env("StackGraspT8-v2", max_episode_steps=140)
+class StackGraspT8Env(StackCarryT8Env):
+    """T8-v2: the knowledge is WHICH END TO GRASP (discrete), not where to
+    place the block (continuous).
+
+    Why a redesign rather than a re-run.  T8-v1 died on a measured
+    anti-correlation: the premium and the teacher's evenness could not both
+    exist, because the placement compensation had to fight a cantilever
+    tilt that itself scaled with the disturbance.  Rushing the carry bought
+    knowledge (+0.121) at the cost of an uncertifiable teacher (spread
+    0.184); calming it certified the teacher (0.062) and erased the
+    knowledge (+0.006).  A continuous compensation against a continuously
+    growing disturbance has no operating point.
+
+    T7's structure is the way out, applied to the user's stack-and-carry
+    idea: make the knowledge DISCRETE.  The block is seated at the beam's
+    centre, so the two beam ends are the only graspable points -- and the
+    centre grasp, which would be a c-independent safe corner (design law 3,
+    the trap that killed T8-v1's first geometry), is physically blocked by
+    the block itself.  The stack's hidden centre of mass lies along the
+    beam's long axis, so grasping the end NEAR the COM gives a short moment
+    arm and a level carry, while grasping the FAR end torques the beam in
+    the gripper, tilts the block's support and topples it.  Both wrong
+    choices cost, the right choice reverses with c, and the choice is
+    committed the moment the gripper closes and lifts.
+
+    Only com_x is hidden here: com_y is zeroed so the sideways-topple mode
+    that dominated v1 cannot confound the end-choice signal.  If the probe
+    shows the better end flipping with the sign of com_x, the full gate
+    follows; if it does not, T8 stays descoped and this costs one probe.
+    """
+
+    TOP_SEAT_DX = 0.0          # block at the beam centre: blocks the safe grasp
+    GRASP_CHOICES = (-0.045, 0.045)   # the two beam ends
+    # v2a: probe v2 found grasp +x winning at EVERY com_x, i.e. a c-independent
+    # best end - design law 3's trap again, but this time created by robot
+    # kinematics rather than by the task: with the beam at x=-0.10 the +x end
+    # sits 9 cm closer to the arm base and is simply easier to hold. Centre
+    # the beam and the goal on x=0 so the two ends are kinematically
+    # equivalent and only the hidden COM can break the tie.
+    BASE_SPAWN = (0.0, -0.16)
+    TOP_SPAWN = (0.14, -0.16)
+    GOAL_XY = (0.0, 0.18)
+    # com_frac_max at the v1 maximum: the block half-length along the beam is
+    # 3 cm, so +-0.6 puts the block's COM up to 1.8 cm off centre, which
+    # moves the STACK's COM about 1.4 cm once the beam's own mass is
+    # included -- turning the two moment arms into roughly 3.1 cm vs 5.9 cm.
+    C_SPEC_KW = dict(com_frac_max=0.6, mass_mult_range=(0.7, 1.1),
+                     friction_range=(0.35, 0.7))
+
+    def _build_task(self, options: dict):
+        base_c = dict(self._c)
+        base_c["com_x_frac"] = np.zeros(self.num_envs)
+        base_c["com_y_frac"] = np.zeros(self.num_envs)
+        self.obj = build_randomized_box(
+            self, self.BASE_HALF, base_c, name="beam")
+        # the block keeps its hidden COM along x only
+        top_c = dict(self._c)
+        top_c["com_y_frac"] = np.zeros(self.num_envs)
+        self.top = build_randomized_box(
+            self, self.TOP_HALF, top_c, name="block", base_density=1000.0)
+        builder = self.scene.create_actor_builder()
+        green = sapien.render.RenderMaterial(base_color=[0.1, 0.7, 0.1, 1])
+        builder.add_box_visual(half_size=[0.05, 0.05, 6e-4], material=green)
+        builder.initial_pose = sapien.Pose(
+            p=[self.GOAL_XY[0], self.GOAL_XY[1], 1e-3])
+        self.goal_marker = builder.build_kinematic(name="goal_marker")
+
+
+StackGraspT8TeacherEnv = register_env("StackGraspT8Teacher-v2", max_episode_steps=140)(
+    _teacher(StackGraspT8Env)
+)
+
+
 StackCarryT8TeacherEnv = register_env("StackCarryT8Teacher-v1", max_episode_steps=140)(
     _teacher(StackCarryT8Env)
 )

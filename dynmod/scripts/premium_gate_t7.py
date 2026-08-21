@@ -32,9 +32,21 @@ FLICK_SPEED = 1.0   # below ~0.85 the block never detaches from the hand
                     # the same threshold T3's calibration found
 FLICK_STANDOFF = 0.19
 CROSS_X = -0.20   # side-crossing happens here, behind the walled lanes
-MOUTH_X = -0.10   # flick fires once the block is this deep in its lane
+MOUTH_X = -0.10   # lane mouth
+# v6b: the flick standoff must be REACHABLE. The trace showed the hand
+# parking at x=-0.274 while trying to reach obj_x - 0.19 = -0.411: with the
+# block still at its spawn (-0.221) the windup position is outside the arm's
+# workspace, so `ready` stayed true for 260 steps and no strike ever fired.
+# Creep the block forward onto the last of the plain table first; from
+# PUSH_TO_X the windup sits at -0.27, which the trace shows the arm holds.
+PUSH_TO_X = -0.08
+CREEP_SPEED = 0.2  # gentle: the approach runs on high-friction table, so the
+                   # block stops quickly and settles in a repeatable place
 PUSH_Z = 0.015
-HORIZON = 200
+LANE_TOL = 0.012    # v6: strike only a block centred this well in its lane
+SETTLE_V = 0.01     # v6: ...and this close to at rest
+HORIZON = 260       # v6: settling costs steps; 200 cut some episodes off
+                    # before they ever launched
 
 
 def policy(base, act_dim, route):
@@ -49,9 +61,22 @@ def policy(base, act_dim, route):
     # (retreating on channel entry alone cut the strike mid-contact)
     launched = (obj[:, 0] > base.CH_X[0] + 0.02) \
         & ((obj[:, 0] - tcp[:, 0]) > 0.05)
-    # lanes confine y once crossed; normal tolerance suffices
-    at_row = (obj[:, 1] - y_t).abs() < 0.02
-    ready = at_row & (obj[:, 0] > MOUTH_X - 0.03)
+    # v6 SETTLE-THEN-STRIKE: probe v5 left 10-20 cm of launch scatter against
+    # a ~5 cm slot, because the flick fired while the block was still drifting
+    # from the side-push and still off-centre in the lane.  Strike only a
+    # block that is (a) centred to 12 mm and (b) at rest, so every launch
+    # starts from the same state and the spread that remains is physics.
+    at_row = (obj[:, 1] - y_t).abs() < LANE_TOL
+    speed = torch.linalg.norm(base.obj.linear_velocity[:, :2], dim=1)
+    settled = speed < SETTLE_V
+    # v6a: the strike now happens FROM THE STAGING AREA, not from inside the
+    # lane. v6's first cut kept v5's slow 0.35 approach push, which drove the
+    # block into the slick channel before the flick - so the block coasted a
+    # c-dependent distance BEFORE the launch even began, which is exactly the
+    # scatter we are trying to remove. Settle the block on its lane row where
+    # it spawns, then fire one committed flick through the confined lane.
+    advanced = obj[:, 0] > PUSH_TO_X
+    ready = at_row & settled & advanced
 
     a = torch.zeros((n, act_dim), device=device)
     a[:, 3:] = -1.0
@@ -64,24 +89,28 @@ def policy(base, act_dim, route):
     side_stand[:, 1] -= y_dir * 0.055
     side_stand[:, 2] = PUSH_Z
     side_push = torch.zeros_like(tcp)
-    side_push[:, 1] = y_dir * 0.3
+    # taper the push as the row is approached: a flat 0.3 overshot the 12 mm
+    # window and the block never satisfied `centred`
+    side_push[:, 1] = y_dir * torch.clip((y_t - obj[:, 1]).abs() * 6.0, 0.05, 0.3)
     side_push[:, 0] = torch.clip((obj[:, 0] - tcp[:, 0]) * 2.0, -0.2, 0.2)
     to_side = torch.linalg.norm(tcp[:, :2] - side_stand[:, :2], dim=1)
     side_aligned = (to_side < 0.015) & (tcp[:, 2] < PUSH_Z + 0.015)
 
     # stage 2: T3-style windup + charge along +x at the fixed flick speed
-    standoff = torch.where(ready, torch.full((n,), FLICK_STANDOFF, device=device),
+    standoff = torch.where(advanced, torch.full((n,), FLICK_STANDOFF, device=device),
                            torch.full((n,), 0.055, device=device))
     behind = obj.clone()
     behind[:, 0] -= standoff
     behind[:, 2] = PUSH_Z
     to_behind = torch.linalg.norm(tcp[:, :2] - behind[:, :2], dim=1)
     x_speed = torch.where(ready, torch.full((n,), FLICK_SPEED, device=device),
-                          torch.full((n,), 0.35, device=device))
+                          torch.full((n,), CREEP_SPEED, device=device))
     x_push = torch.zeros_like(tcp)
     x_push[:, 0] = x_speed
     x_push[:, 1] = torch.clip((obj[:, 1] - tcp[:, 1]) * 2.0, -0.2, 0.2)
-    x_aligned = (to_behind < 0.02) & (tcp[:, 2] < PUSH_Z + 0.015)
+    # creep while the block is short of PUSH_TO_X; strike only when ready
+    x_aligned = (to_behind < 0.02) & (tcp[:, 2] < PUSH_Z + 0.015) \
+        & (ready | (at_row & ~advanced))
     charging = ready & ((obj[:, 0] - tcp[:, 0]) > 0.03) \
         & ((tcp[:, 1] - obj[:, 1]).abs() < 0.025) & (tcp[:, 2] < PUSH_Z + 0.02) \
         & (tcp[:, 0] < 0.02)  # full follow-through (clamping at the channel
@@ -106,9 +135,12 @@ def policy(base, act_dim, route):
 
 
 def make_env(n, **kw):
+    # override the registered 200-step limit: v6 spends steps settling the
+    # block before the strike, and a TimeLimit below HORIZON would truncate
+    # episodes mid-slide and silently score them as failures
     return gym.make("RouteChoiceT7-v1", num_envs=n, obs_mode="state",
                     control_mode="pd_ee_delta_pos", sim_backend="physx_cuda",
-                    **kw)
+                    max_episode_steps=HORIZON, **kw)
 
 
 def probe():
