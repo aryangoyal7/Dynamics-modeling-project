@@ -1090,8 +1090,18 @@ class RouteChoiceT7Env(SlideToSlotT3Env):
     # harder than the slick left while letting c decide the stop point.
     GRIPPY_FRICTION = 0.35
     # per-channel slot centers, set from the stopping-distribution probe
-    SLOT_L_X = 0.21
-    SLOT_R_X = 0.15
+    # v6f: placed from the MEASURED stopping distributions, not guessed.
+    # With the staging step removed, stop-x is friction-driven and tight
+    # (IQR 1.3-2.1 cm against a 2.5 cm slot half-width):
+    #        friction  0.33   0.50   0.68
+    #   slick channel  0.191  0.144  0.118   (spans 7.3 cm)
+    #  grippy channel  0.130  0.112  0.098   (spans 3.2 cm)
+    # Left slot sits where SLIPPERY objects stop on the slick floor; right
+    # slot where GRIPPY ones stop on the grippy floor. Neither route covers
+    # the whole friction range, so there is no safe corner: the crossover is
+    # near f=0.42, and a c-blind controller must forfeit one side of it.
+    SLOT_L_X = 0.191
+    SLOT_R_X = 0.098
     spawn_x_range = (-0.14, -0.10)  # behind the lanes, in the crossing zone
 
     def _build_task(self, options: dict):
@@ -1124,7 +1134,33 @@ class RouteChoiceT7Env(SlideToSlotT3Env):
         builder.initial_pose = sapien.Pose()
         self.channel = builder.build_static(name="channel")
 
-        # floors: slick left, grippy right (staging area stays plain table)
+        # v6f: a STAGING FLOOR at the same height as the channel floors.
+        # Until now the staging area was bare table while the channels sat on
+        # a 2 mm slab, so every launched block hit a 2 mm lip at x=CH_X[0] at
+        # full flick speed. With physics pinned, stop-x still scattered with
+        # sd 0.256 m while launch yaw (sd 1.4 deg) and launch position were
+        # UNCORRELATED with the outcome (r=-0.08 and +0.02) - the strike was
+        # not the noise source, the step was. Same height, one neutral
+        # friction across both lanes so it cannot bias the route choice.
+        sb = self.scene.create_actor_builder()
+        stage_hx = 0.5 * (x0 - self.STAGE_X)
+        stage_cx = 0.5 * (self.STAGE_X + x0)
+        stage_hy = self.CH_OFF + self.CH_HALF
+        sb.add_box_collision(
+            half_size=[stage_hx, stage_hy, self.FLOOR_T / 2],
+            pose=sapien.Pose(p=[stage_cx, 0.0, self.FLOOR_T / 2]),
+            material=_physx.PhysxMaterial(self.GRIPPY_FRICTION,
+                                          self.GRIPPY_FRICTION, 0.0),
+        )
+        sb.add_box_visual(
+            half_size=[stage_hx, stage_hy, self.FLOOR_T / 2],
+            pose=sapien.Pose(p=[stage_cx, 0.0, self.FLOOR_T / 2]),
+            material=sapien.render.RenderMaterial(base_color=[0.85, 0.85, 0.85, 1]),
+        )
+        sb.initial_pose = sapien.Pose()
+        self.floor_stage = sb.build_static(name="floor_stage")
+
+        # floors: slick left, grippy right
         for y_c, fric, color, name in (
             (self.CH_OFF, self.FLOOR_FRICTION, [0.75, 0.85, 0.95, 1], "floor_slick"),
             (-self.CH_OFF, self.GRIPPY_FRICTION, [0.95, 0.85, 0.75, 1], "floor_grippy"),

@@ -30,7 +30,9 @@ FRICTION_B = [0.33, 0.5, 0.68]
 FLICK_SPEED = 1.0   # below ~0.85 the block never detaches from the hand
                     # (measured: stop-and-go to a fixed point at every c) -
                     # the same threshold T3's calibration found
-FLICK_STANDOFF = 0.15  # v6c: shorter run-up, now comfortably in reach
+FLICK_STANDOFF = 0.19  # v6c: full T3 run-up again - with the block
+                       # launching from x=0.02 the windup at -0.17 is
+                       # well inside the workspace
 CROSS_X = -0.10   # side-crossing happens here, behind the walled lanes
 MOUTH_X = 0.00    # lane mouth
 # v6b: the flick standoff must be REACHABLE. The trace showed the hand
@@ -40,8 +42,10 @@ MOUTH_X = 0.00    # lane mouth
 # Creep the block forward onto the last of the plain table first; from
 # PUSH_TO_X the windup sits at -0.27, which the trace shows the arm holds.
 PUSH_TO_X = 0.02
-CREEP_SPEED = 0.2  # gentle: the approach runs on high-friction table, so the
-                   # block stops quickly and settles in a repeatable place
+CREEP_SPEED = 0.35  # v6e: 0.2 was too gentle - the trace showed the block
+                    # covering only 12 cm in 260 steps and never reaching
+                    # PUSH_TO_X, so the flick never armed. The approach runs
+                    # on high-friction table, so it still settles quickly.
 PUSH_Z = 0.015
 LANE_TOL = 0.012    # v6: strike only a block centred this well in its lane
 SETTLE_V = 0.01     # v6: ...and this close to at rest
@@ -91,7 +95,9 @@ def policy(base, act_dim, route):
     side_push = torch.zeros_like(tcp)
     # taper the push as the row is approached: a flat 0.3 overshot the 12 mm
     # window and the block never satisfied `centred`
-    side_push[:, 1] = y_dir * torch.clip((y_t - obj[:, 1]).abs() * 6.0, 0.05, 0.3)
+    # v6e: floor lowered 0.05 -> 0.02; the higher floor overshot the lane and
+    # pushed about 3% of blocks clean over the outer rail (trace: y=0.21, z<0)
+    side_push[:, 1] = y_dir * torch.clip((y_t - obj[:, 1]).abs() * 6.0, 0.02, 0.3)
     side_push[:, 0] = torch.clip((obj[:, 0] - tcp[:, 0]) * 2.0, -0.2, 0.2)
     to_side = torch.linalg.norm(tcp[:, :2] - side_stand[:, :2], dim=1)
     side_aligned = (to_side < 0.015) & (tcp[:, 2] < PUSH_Z + 0.015)
@@ -108,12 +114,20 @@ def policy(base, act_dim, route):
     x_push = torch.zeros_like(tcp)
     x_push[:, 0] = x_speed
     x_push[:, 1] = torch.clip((obj[:, 1] - tcp[:, 1]) * 2.0, -0.2, 0.2)
-    # creep while the block is short of PUSH_TO_X; strike only when ready
-    x_aligned = (to_behind < 0.02) & (tcp[:, 2] < PUSH_Z + 0.015) \
+    # creep while the block is short of PUSH_TO_X; strike only when ready.
+    # v6e: the creep needs a looser alignment window than the strike - the
+    # block runs away from the hand as it is pushed, so a 2 cm window kept
+    # flickering off and the push was intermittent.
+    align_tol = torch.where(advanced, torch.full((n,), 0.02, device=device),
+                            torch.full((n,), 0.035, device=device))
+    x_aligned = (to_behind < align_tol) & (tcp[:, 2] < PUSH_Z + 0.015) \
         & (ready | (at_row & ~advanced))
     charging = ready & ((obj[:, 0] - tcp[:, 0]) > 0.03) \
         & ((tcp[:, 1] - obj[:, 1]).abs() < 0.025) & (tcp[:, 2] < PUSH_Z + 0.02) \
-        & (tcp[:, 0] < 0.02)  # full follow-through (clamping at the channel
+        & (tcp[:, 0] < 0.12)  # v6c: this cap moved +10 cm with the layout. At
+        # the old 0.02 it sat exactly on the new launch point, so the charge
+        # was cut the instant it began and blocks travelled ~0 cm.
+        # full follow-through (clamping at the channel
         # entrance cut strikes mid-swing -> 15 cm launch scatter, probe v3);
         # the block outruns the hand and `launched` retreats it well before
         # either slot
